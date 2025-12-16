@@ -30,8 +30,9 @@ const nextConfig: NextConfig = {
     };
     return config;
   },
-  // Output configuration for static export (if needed)
-  // output: 'standalone', // Uncomment if you need standalone output
+  // Turbopack configuration for Next.js 16
+  // Empty config to silence the warning about webpack/turbopack conflict
+  turbopack: {},
 };
 
 export default nextConfig;
