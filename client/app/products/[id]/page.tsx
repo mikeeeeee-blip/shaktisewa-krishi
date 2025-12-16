@@ -43,7 +43,7 @@ export default function ProductDetailPage() {
 
   // Safe array access with validation
   const selectedVariantData = product.variants?.[selectedVariant];
-  const productImage = product.images?.[0] || '/placeholder-image.png';
+  const productImage = product.images?.[0] || '/logo.png';
 
   // Validate that we have required data
   const hasImages = product.images && Array.isArray(product.images) && product.images.length > 0;
@@ -126,7 +126,7 @@ export default function ProductDetailPage() {
                 priority
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
-                  target.src = '/placeholder-image.png';
+                  target.src = '/logo.png';
                 }}
               />
 
