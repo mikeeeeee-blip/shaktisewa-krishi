@@ -29,7 +29,7 @@ export default function HowReferralWorksPage() {
       <div className="hero-banner">
         <div className="hero-banner-content">
           <h1>Refer & Earn</h1>
-          <p>Share KRISHANSHECLAT AGROXGLOBAL & Earn Rewards!</p>
+          <p>Share ShaktiSewa & Earn Rewards!</p>
         </div>
       </div>
 
@@ -47,7 +47,7 @@ export default function HowReferralWorksPage() {
             <Gift className="w-16 h-16 text-yellow-700" />
             <div>
               <h3>Earn ₹100 for Every Successful Referral!</h3>
-              <p>Invite your friends to shop on KRISHANSHECLAT AGROXGLOBAL and earn rewards when they make their first purchase.</p>
+              <p>Invite your friends to shop on ShaktiSewa and earn rewards when they make their first purchase.</p>
             </div>
           </div>
         </div>

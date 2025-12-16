@@ -281,7 +281,7 @@ export default function ProductDetailPage() {
                 <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2">
                   <Truck size={24} className="text-purple-600" />
                 </div>
-                <p className="text-xs text-gray-700">Eclat AgroxglobalDelivery</p>
+                <p className="text-xs text-gray-700">ShaktiSewa Delivery</p>
               </div>
               <div className="text-center">
                 <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-2">

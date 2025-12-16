@@ -68,7 +68,7 @@ export default function PrivacyPolicyPage() {
 
           <div className="info-box mb-8">
             <p className="text-gray-700">
-              At KRISHANSHECLAT AGROXGLOBAL, we are committed to protecting your privacy and ensuring the security of your 
+              At ShaktiSewa, we are committed to protecting your privacy and ensuring the security of your 
               personal information. This Privacy Policy explains how we collect, use, disclose, and safeguard 
               your information when you visit our website and use our services.
             </p>
@@ -178,7 +178,7 @@ export default function PrivacyPolicyPage() {
             <div className="space-y-2">
               <p className="flex items-center gap-2">
                 <Mail className="w-5 h-5 text-green-600" />
-                <a href="mailto:privacy@eclatagro.com" className="text-green-600 hover:underline">privacy@eclatagro.com</a>
+                <a href="mailto:privacy@shaktisewa.com" className="text-green-600 hover:underline">privacy@shaktisewa.com</a>
               </p>
               <p className="flex items-center gap-2">
                 <Bell className="w-5 h-5 text-green-600" />

@@ -4,12 +4,12 @@ import ProductCard from './ProductCard';
 import { productData } from '@/data/products';
 
 export default function FeaturedProducts() {
-  // Filter featured products - match krishansheclatagro.com Featured Products section
+  // Filter featured products - match shaktisewa.com Featured Products section
   // These are primarily Exylon products (Crop Protection) and other high-quality products
   const featuredProducts = Object.values(productData)
     .filter((product) => {
       const name = product.name.toLowerCase();
-      // Include Exylon products (from krishansheclatagro.com Featured Products)
+      // Include Exylon products (from shaktisewa.com Featured Products)
       if (name.includes('exylon')) return true;
       // Include Perfect Crop Dekkan Charger Plus
       if (name.includes('perfect crop') && name.includes('dekkan')) return true;

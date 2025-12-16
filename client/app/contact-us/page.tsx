@@ -79,9 +79,9 @@ export default function ContactUsPage() {
             </div>
             <h3 className="font-semibold text-gray-900 mb-2">Email Us</h3>
             <p className="text-gray-600 text-sm mb-2">We reply within 24 hours</p>
-            <a href="mailto:support@eclatagro.com" className="text-green-600 font-semibold hover:underline">support@eclatagro.com</a>
+            <a href="mailto:support@shaktisewa.com" className="text-green-600 font-semibold hover:underline">support@shaktisewa.com</a>
             <br />
-            <a href="mailto:info@eclatagro.com" className="text-green-600 font-semibold hover:underline">info@eclatagro.com</a>
+            <a href="mailto:info@shaktisewa.com" className="text-green-600 font-semibold hover:underline">info@shaktisewa.com</a>
           </div>
           
           <div className="feature-card text-center">
@@ -223,8 +223,8 @@ export default function ContactUsPage() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900">Email Addresses</h3>
-                  <p className="text-gray-600">support@eclatagro.com</p>
-                  <p className="text-gray-600">info@eclatagro.com</p>
+                  <p className="text-gray-600">support@shaktisewa.com</p>
+                  <p className="text-gray-600">info@shaktisewa.com</p>
                 </div>
               </div>
               
@@ -235,7 +235,7 @@ export default function ContactUsPage() {
                 <div>
                   <h3 className="font-semibold text-gray-900">Office Address</h3>
                   <p className="text-gray-600">
-                    KRISHANSHECLAT AGROXGLOBAL Pvt. Ltd.<br />
+                    ShaktiSewa Pvt. Ltd.<br />
                     Sector 62, Noida<br />
                     Uttar Pradesh - 201301<br />
                     India
@@ -279,7 +279,7 @@ export default function ContactUsPage() {
             <a href="https://wa.me/917065060162" className="inline-flex items-center gap-2 text-green-600 font-semibold hover:underline" target="_blank" rel="noopener noreferrer">
               <MessageCircle className="w-4 h-4" /> WhatsApp
             </a>
-            <a href="mailto:support@eclatagro.com" className="inline-flex items-center gap-2 text-green-600 font-semibold hover:underline">
+            <a href="mailto:support@shaktisewa.com" className="inline-flex items-center gap-2 text-green-600 font-semibold hover:underline">
               <Mail className="w-4 h-4" /> Email Us
             </a>
           </div>

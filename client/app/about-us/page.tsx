@@ -49,7 +49,7 @@ export default function AboutUsPage() {
               India&apos;s Leading Agricultural Marketplace
             </h2>
             <p className="text-gray-600 text-lg leading-relaxed mb-4">
-              KRISHANSHECLAT AGROXGLOBAL is India&apos;s premier online agricultural marketplace, dedicated to serving farmers, 
+              ShaktiSewa is India&apos;s premier online agricultural marketplace, dedicated to serving farmers, 
               agricultural professionals, and gardening enthusiasts across the nation. Founded with a vision 
               to revolutionize agricultural commerce, we bring together quality products, competitive prices, 
               and exceptional service under one roof.
@@ -73,7 +73,7 @@ export default function AboutUsPage() {
             <div className="aspect-video rounded-xl overflow-hidden bg-gradient-to-br from-green-100 to-green-200 flex items-center justify-center">
               <Image
                 src="https://agribegri.com/static/uploads/eclatagro_logo.png"
-                alt="KRISHANSHECLAT AGROXGLOBAL - Agricultural Excellence"
+                alt="ShaktiSewa - Agricultural Excellence"
                 width={400}
                 height={200}
                 className="object-contain p-8"
@@ -130,7 +130,7 @@ export default function AboutUsPage() {
 
         {/* Why Choose Us */}
         <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-6 text-center">
-          Why Choose KRISHANSHECLAT AGROXGLOBAL?
+          Why Choose ShaktiSewa?
         </h2>
         <div className="feature-grid mb-12">
           <div className="feature-card">
@@ -172,7 +172,7 @@ export default function AboutUsPage() {
             <Users className="feature-card-icon text-teal-600" />
             <h3 className="font-semibold text-gray-900 mb-2">Trusted by Thousands</h3>
             <p className="text-gray-600 text-sm">
-              Join over 50,000+ satisfied customers who trust KRISHANSHECLAT AGROXGLOBAL for their agricultural needs.
+              Join over 50,000+ satisfied customers who trust ShaktiSewa for their agricultural needs.
             </p>
           </div>
         </div>

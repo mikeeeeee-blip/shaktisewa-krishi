@@ -256,7 +256,7 @@ export default function CustomerLoginPage() {
                   <UserPlus className="w-8 h-8 text-green-600" />
                 </div>
                 <h2>Create Account</h2>
-                <p>Join KRISHANSHECLAT AGROXGLOBAL and start shopping</p>
+                <p>Join ShaktiSewa and start shopping</p>
               </div>
 
               <form onSubmit={handleRegisterSubmit}>

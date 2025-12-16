@@ -103,7 +103,7 @@ export default function FAQPage() {
         },
         {
           question: 'Do you provide customer support?',
-          answer: 'Yes, our customer support team is available Monday through Saturday, 9 AM to 6 PM IST. You can reach us via phone (7065060162), email (support@eclatagro.com), or WhatsApp for quick assistance.',
+          answer: 'Yes, our customer support team is available Monday through Saturday, 9 AM to 6 PM IST. You can reach us via phone (7065060162), email (support@shaktisewa.com), or WhatsApp for quick assistance.',
         },
       ]
     },
@@ -230,7 +230,7 @@ export default function FAQPage() {
             <a href="tel:7065060162" className="inline-flex items-center gap-2 bg-white text-green-600 px-6 py-3 rounded-lg font-semibold shadow-sm hover:shadow-md transition-shadow">
               <Phone className="w-5 h-5" /> Call Us
             </a>
-            <a href="mailto:support@eclatagro.com" className="inline-flex items-center gap-2 bg-white text-green-600 px-6 py-3 rounded-lg font-semibold shadow-sm hover:shadow-md transition-shadow">
+            <a href="mailto:support@shaktisewa.com" className="inline-flex items-center gap-2 bg-white text-green-600 px-6 py-3 rounded-lg font-semibold shadow-sm hover:shadow-md transition-shadow">
               <Mail className="w-5 h-5" /> Email Us
             </a>
             <a href="https://wa.me/917065060162" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors">

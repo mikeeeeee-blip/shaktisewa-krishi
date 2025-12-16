@@ -81,7 +81,7 @@ export default function EclatAgroxglobalBlogPage() {
       {/* Hero Banner */}
       <div className="hero-banner">
         <div className="hero-banner-content">
-          <h1>KRISHANSHECLAT AGROXGLOBAL Blog</h1>
+          <h1>ShaktiSewa Blog</h1>
           <p>Agricultural Insights, Tips & Expert Advice</p>
         </div>
       </div>

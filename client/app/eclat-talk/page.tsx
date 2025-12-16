@@ -77,7 +77,7 @@ export default function EclatTalkPage() {
       {/* Hero Banner */}
       <div className="hero-banner">
         <div className="hero-banner-content">
-          <h1>KRISHANSHECLAT Talk</h1>
+          <h1>ShaktiSewa Talk</h1>
           <p>Connect, Discuss & Learn from Fellow Farmers</p>
         </div>
       </div>
@@ -87,7 +87,7 @@ export default function EclatTalkPage() {
         <div className="breadcrumbs">
           <Link href="/">Home</Link>
           <span className="breadcrumbs-separator">/</span>
-          <span>KRISHANSHECLAT Talk</span>
+          <span>ShaktiSewa Talk</span>
         </div>
 
         {/* Stats */}

@@ -82,7 +82,7 @@ export const productData = {
   '2': {
     id: '2',
     name: 'Pellot - Paclobutrazol 23% SC Plant Growth Regulator, Ideal for Mango and Other Major Vegetable Crops',
-    brand: 'KRISHANSHECLAT AGROXGLOBAL Trade Link Private Limited',
+    brand: 'ShaktiSewa Trade Link Private Limited',
     rating: 4.49,
     reviews: 242,
     originalPrice: 3740,
@@ -152,7 +152,7 @@ export const productData = {
     ],
     note: 'This product is for agricultural purposes only. Please verify proper compatibility before placing your order.',
     technicalDetails: {
-      brand: 'KRISHANSHECLAT AGROXGLOBAL Trade Link Private Limited',
+      brand: 'ShaktiSewa Trade Link Private Limited',
       productCode: '10149',
       countryOfOrigin: 'India',
       category: 'Growth Regulators',
@@ -168,7 +168,7 @@ export const productData = {
   '3': {
     id: '3',
     name: 'Clorentis Insecticide - Chlorantraniliprole 18.5% SC',
-    brand: 'KRISHANSHECLAT AGROXGLOBAL Trade Link Private Limited',
+    brand: 'ShaktiSewa Trade Link Private Limited',
     rating: 4.57,
     reviews: 303,
     originalPrice: 460,
@@ -253,7 +253,7 @@ export const productData = {
     ],
     note: 'Chlorantraniliprole 18.5% SC is intended for agricultural purposes only.',
     technicalDetails: {
-      brand: 'KRISHANSHECLAT AGROXGLOBAL Trade Link Private Limited',
+      brand: 'ShaktiSewa Trade Link Private Limited',
       productCode: '10141',
       countryOfOrigin: 'India',
       category: 'Crop Protection',
@@ -270,7 +270,7 @@ export const productData = {
   '4': {
     id: '4',
     name: 'Agrigib - Gibberellic Acid 0.001% L',
-    brand: 'KRISHANSHECLAT AGROXGLOBAL Trade Link Private Limited',
+    brand: 'ShaktiSewa Trade Link Private Limited',
     rating: 4.57,
     reviews: 209,
     originalPrice: 960,
@@ -347,7 +347,7 @@ export const productData = {
     ],
     note: 'Agrigib (Gibberellic Acid 0.001% L) is compatible with commonly used fertilizers and pesticides except for sulfur, copper fungicides, Bordeaux mixtures, and alkaline substances.',
     technicalDetails: {
-      brand: 'KRISHANSHECLAT AGROXGLOBAL Trade Link Private Limited',
+      brand: 'ShaktiSewa Trade Link Private Limited',
       productCode: '10151',
       countryOfOrigin: 'India',
       category: 'Growth Regulators',
@@ -784,7 +784,7 @@ export const productData = {
   },
   "7": {
     "id": "7",
-    "name": "Eclat AgroxglobalCombo Pack (Emoctan 250gm + Agrigib 500ml) Powerful Combination, Complete Crop Protection and Growth Solution",
+    "name": "ShaktiSewaCombo Pack (Emoctan 250gm + Agrigib 500ml) Powerful Combination, Complete Crop Protection and Growth Solution",
     "brand": "Noble Crop Science",
     "rating": 4.4,
     "reviews": 13261,
@@ -843,7 +843,7 @@ export const productData = {
         "isBestSeller": null
       }
     ],
-    "description": "Get the best crop protection and crop care products in one combo. Eclat AgroxglobalEmoctan 250 gm + Agrigib 500 ml. This combination includes a strong insecticide (Emoctan) and a Plant Growth Regulator (Agrigib), which provides strong pest protection against a broad spectrum of pests and ensures crops receive essential nutrition for healthy and fruitful growth.",
+    "description": "Get the best crop protection and crop care products in one combo. ShaktiSewaEmoctan 250 gm + Agrigib 500 ml. This combination includes a strong insecticide (Emoctan) and a Plant Growth Regulator (Agrigib), which provides strong pest protection against a broad spectrum of pests and ensures crops receive essential nutrition for healthy and fruitful growth.",
     "technicalComposition": "Emamectin Benzoate 5% SG",
     "keyFeatures": [
       {
@@ -983,7 +983,7 @@ export const productData = {
   },
   "9": {
     "id": "9",
-    "name": "Eclat AgroxglobalSafe Crop Combo (EM-1 100gm + Agrigib 500ml) Effective Pest Control And Plant Growth",
+    "name": "ShaktiSewaSafe Crop Combo (EM-1 100gm + Agrigib 500ml) Effective Pest Control And Plant Growth",
     "brand": "Noble Crop Science",
     "rating": 4.5,
     "reviews": 12918,
@@ -1062,7 +1062,7 @@ export const productData = {
   },
   "10": {
     "id": "10",
-    "name": "Eclat AgroxglobalSucking Pest & Growth Combo (Dhanuka Super D 500ml + NCS Forever 500ml) Protects Crops & Enhances Growth, Ideal For Sustainable Farming",
+    "name": "ShaktiSewaSucking Pest & Growth Combo (Dhanuka Super D 500ml + NCS Forever 500ml) Protects Crops & Enhances Growth, Ideal For Sustainable Farming",
     "brand": "Noble Crop Science",
     "rating": 4.5,
     "reviews": 12917,
@@ -1169,7 +1169,7 @@ export const productData = {
   },
   "11": {
     "id": "11",
-    "name": "Eclat AgroxglobalSuper Combo (Areva 250 Gm + Spring Ever 1 Ltr) Plant Growth And Pest Control For Healthy Crops",
+    "name": "ShaktiSewaSuper Combo (Areva 250 Gm + Spring Ever 1 Ltr) Plant Growth And Pest Control For Healthy Crops",
     "brand": "Noble Crop Science",
     "rating": 4.5,
     "reviews": 12912,
@@ -3519,7 +3519,7 @@ export const productData = {
   },
   "25": {
     "id": "25",
-    "name": "Eclat AgroxglobalSquare Wall Clock, Stylish, Durable Plastic Analog Clock For Home And Office",
+    "name": "ShaktiSewaSquare Wall Clock, Stylish, Durable Plastic Analog Clock For Home And Office",
     "brand": null,
     "rating": null,
     "reviews": 12316,
@@ -3545,7 +3545,7 @@ export const productData = {
         "isBestSeller": null
       }
     ],
-    "description": "Eclat AgroxglobalSquare Wall Clock combines elegance, functionality, and durability to enhance your living or working space. Manufactured from high-quality plastic, this clock ensures long-lasting performance while maintaining a sleek, modern design.",
+    "description": "ShaktiSewaSquare Wall Clock combines elegance, functionality, and durability to enhance your living or working space. Manufactured from high-quality plastic, this clock ensures long-lasting performance while maintaining a sleek, modern design.",
     "technicalComposition": "Brand: Agribegri",
     "keyFeatures": [
       {
@@ -7702,7 +7702,7 @@ export const productData = {
   },
   "54": {
     "id": "54",
-    "name": "Eclat AgroxglobalHumic Acid 98% (Super Potassium Humate) Loose Bag Packing, It Helps The Soil To Improve Plant Growth",
+    "name": "ShaktiSewaHumic Acid 98% (Super Potassium Humate) Loose Bag Packing, It Helps The Soil To Improve Plant Growth",
     "brand": null,
     "rating": 4.7,
     "reviews": 1105,

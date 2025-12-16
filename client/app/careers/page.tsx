@@ -101,14 +101,14 @@ export default function CareersPage() {
             Grow With Us
           </h2>
           <p className="text-gray-600 text-lg max-w-3xl mx-auto leading-relaxed">
-            At KRISHANSHECLAT AGROXGLOBAL, we&apos;re on a mission to revolutionize agriculture in India. Join our team of 
+            At ShaktiSewa, we&apos;re on a mission to revolutionize agriculture in India. Join our team of 
             passionate individuals working to empower millions of farmers with technology and innovation.
           </p>
         </div>
 
         {/* Why Work With Us */}
         <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl p-8 mb-12">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Why Work at KRISHANSHECLAT AGROXGLOBAL?</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Why Work at ShaktiSewa?</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {benefits.map((benefit, index) => (
               <div key={index} className="bg-white rounded-xl p-6 shadow-sm">
@@ -156,7 +156,7 @@ export default function CareersPage() {
                   <p className="text-gray-600">{job.description}</p>
                 </div>
                 <div>
-                  <a href={`mailto:careers@eclatagro.com?subject=Application for ${job.title}`} className="job-apply-btn">
+                  <a href={`mailto:careers@shaktisewa.com?subject=Application for ${job.title}`} className="job-apply-btn">
                     Apply Now <ChevronRight className="w-4 h-4" />
                   </a>
                 </div>
@@ -172,7 +172,7 @@ export default function CareersPage() {
             <div className="process-step text-center">
               <div className="process-step-number mx-auto">1</div>
               <h3>Submit Resume</h3>
-              <p>Send your resume to careers@eclatagro.com</p>
+              <p>Send your resume to careers@shaktisewa.com</p>
             </div>
             <div className="process-step text-center">
               <div className="process-step-number mx-auto">2</div>
@@ -200,7 +200,7 @@ export default function CareersPage() {
             </p>
             <div className="flex items-center gap-2 text-green-600 font-semibold">
               <Mail className="w-5 h-5" />
-              <a href="mailto:careers@eclatagro.com" className="hover:underline">careers@eclatagro.com</a>
+              <a href="mailto:careers@shaktisewa.com" className="hover:underline">careers@shaktisewa.com</a>
             </div>
           </div>
         </div>
@@ -209,7 +209,7 @@ export default function CareersPage() {
         <div className="cta-banner">
           <h3>Ready to Make an Impact?</h3>
           <p>Join us in our mission to transform Indian agriculture!</p>
-          <a href="mailto:careers@eclatagro.com" className="cta-banner-btn">
+          <a href="mailto:careers@shaktisewa.com" className="cta-banner-btn">
             <Mail className="w-5 h-5" />
             Send Your Resume
           </a>

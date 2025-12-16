@@ -38,7 +38,7 @@ export default function EclatSalePage() {
       {/* Hero Banner */}
       <div className="hero-banner">
         <div className="hero-banner-content">
-          <h1>KRISHANSHECLAT Sale</h1>
+          <h1>ShaktiSewa Sale</h1>
           <p>Mega Discounts on Agricultural Products!</p>
         </div>
       </div>
@@ -48,7 +48,7 @@ export default function EclatSalePage() {
         <div className="breadcrumbs">
           <Link href="/">Home</Link>
           <span className="breadcrumbs-separator">/</span>
-          <span>KRISHANSHECLAT Sale</span>
+          <span>ShaktiSewa Sale</span>
         </div>
 
         {/* Sale Banner */}

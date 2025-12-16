@@ -193,7 +193,7 @@ export default function ShippingDeliveryPage() {
             <div className="space-y-2">
               <p className="flex items-center gap-2">
                 <Mail className="w-5 h-5 text-green-600" />
-                <a href="mailto:support@eclatagro.com" className="text-green-600 hover:underline">support@eclatagro.com</a>
+                <a href="mailto:support@shaktisewa.com" className="text-green-600 hover:underline">support@shaktisewa.com</a>
               </p>
               <p className="flex items-center gap-2">
                 <Phone className="w-5 h-5 text-green-600" />

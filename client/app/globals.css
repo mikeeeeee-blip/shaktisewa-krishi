@@ -436,7 +436,7 @@ footer ul li a:hover {
   perspective: 1000px;
 }
 
-/* Page Content Styling - Matching krishansheclatagro.com */
+/* Page Content Styling - Matching shaktisewa.com */
 .page-content {
   max-width: 1200px;
   margin: 0 auto;
@@ -499,7 +499,7 @@ footer ul li a:hover {
   line-height: 1.4;
 }
 
-/* Prose Content - Matching krishansheclatagro.com */
+/* Prose Content - Matching shaktisewa.com */
 .page-content .prose {
   max-width: 65ch;
   color: #374151;
@@ -527,7 +527,7 @@ footer ul li a:hover {
   color: #111827;
 }
 
-/* Info Boxes - Matching krishansheclatagro.com style */
+/* Info Boxes - Matching shaktisewa.com style */
 .info-box {
   background-color: #ffffff;
   border: 1px solid #e5e7eb;
@@ -552,7 +552,7 @@ footer ul li a:hover {
   border-left: 4px solid #6b7280;
 }
 
-/* Cards - Matching krishansheclatagro.com */
+/* Cards - Matching shaktisewa.com */
 .content-card {
   background: white;
   border: 1px solid #e5e7eb;
@@ -567,7 +567,7 @@ footer ul li a:hover {
   transition: box-shadow var(--transition-base);
 }
 
-/* Feature Grid - Matching krishansheclatagro.com */
+/* Feature Grid - Matching shaktisewa.com */
 .feature-grid {
   display: grid;
   grid-template-columns: 1fr;
