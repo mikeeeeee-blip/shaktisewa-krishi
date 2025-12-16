@@ -43,7 +43,7 @@ export default function ProductDetailPage() {
 
   // Safe array access with validation
   const selectedVariantData = product.variants?.[selectedVariant];
-  const productImage = product.images?.[0] || '/logo.png';
+  const productImage = product.images?.[0] || '';
 
   // Validate that we have required data
   const hasImages = product.images && Array.isArray(product.images) && product.images.length > 0;
@@ -126,7 +126,8 @@ export default function ProductDetailPage() {
                 priority
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
-                  target.src = '/logo.png';
+                  // Use a simple SVG placeholder with ShaktiSewa Foundation text
+                  target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjNmNGY2Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNCIgZmlsbD0iIzE2YTM0NiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk0PSIuM2VtIiBmb250LXdlaWdodD0iYm9sZCI+U2hha3RpU2V3YSBGb3VuZGF0aW9uPC90ZXh0Pjwvc3ZnPg==';
                 }}
               />
 

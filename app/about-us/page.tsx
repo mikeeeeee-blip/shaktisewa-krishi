@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import TopBar from '@/components/TopBar';
 import Header from '@/components/Header';
@@ -71,13 +70,9 @@ export default function AboutUsPage() {
           </div>
           <div className="relative">
             <div className="aspect-video rounded-xl overflow-hidden bg-gradient-to-br from-green-100 to-green-200 flex items-center justify-center">
-              <Image
-                src="https://agribegri.com/static/uploads/eclatagro_logo.png"
-                alt="ShaktiSewa - Agricultural Excellence"
-                width={400}
-                height={200}
-                className="object-contain p-8"
-              />
+              <h2 className="text-4xl md:text-5xl font-bold text-green-600 text-center px-8">
+                ShaktiSewa Foundation
+              </h2>
             </div>
           </div>
         </div>

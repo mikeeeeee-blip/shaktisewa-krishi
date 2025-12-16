@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
-import Image from 'next/image';
 
 interface HeaderProps {
   onMenuToggle?: () => void;
@@ -65,7 +64,7 @@ export default function Header({ onMenuToggle, isMenuOpen = false }: HeaderProps
 
             {/* Logo - Centered */}
             <Link href="/" className="flex items-center gap-1.5 flex-shrink-0 flex-1 justify-center">
-              <Image src='/logo.png' alt='logo' className='object-cover' height={100} width={200}></Image>
+              <span className="text-xl sm:text-2xl font-bold text-green-600">ShaktiSewa Foundation</span>
             </Link>
 
             {/* Right Icons: Home, My Orders (if customer), Admin Dashboard (if admin), Shopping Cart, User */}
@@ -126,7 +125,7 @@ export default function Header({ onMenuToggle, isMenuOpen = false }: HeaderProps
         <div className="hidden lg:flex items-center justify-between py-3 md:py-4 gap-6 md:gap-8">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 flex-shrink-0 hover:opacity-90 transition-opacity duration-200">
-           <Image src='/logo.png' alt='logo' className='object-cover h-auto' height={100} width={200} priority></Image>
+           <span className="text-2xl md:text-3xl font-bold text-green-600">ShaktiSewa Foundation</span>
           </Link>
 
           {/* Search Bar */}
