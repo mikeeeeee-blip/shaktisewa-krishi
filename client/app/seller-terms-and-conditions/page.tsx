@@ -158,9 +158,9 @@ export default function SellerTermsPage() {
           <h2>10. Liability</h2>
           <ul>
             <li>Sellers are fully responsible for their products and services</li>
-            <li>KRISHANSHECLAT AGROXGLOBAL is not liable for seller-customer disputes</li>
+            <li>ShaktiSewa is not liable for seller-customer disputes</li>
             <li>Sellers must maintain appropriate business insurance</li>
-            <li>Sellers indemnify KRISHANSHECLAT AGROXGLOBAL against any claims arising from their products</li>
+            <li>Sellers indemnify ShaktiSewa against any claims arising from their products</li>
           </ul>
 
           <h2>11. Modifications</h2>
