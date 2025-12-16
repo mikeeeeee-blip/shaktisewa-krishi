@@ -1,0 +1,28 @@
+# Exclude backend folder completely from frontend build
+backend/
+
+# Exclude backend node_modules
+backend/node_modules/
+
+# Exclude backend dist (compiled files)
+backend/dist/
+
+# Exclude backend build artifacts
+backend/*.log
+backend/.env
+backend/.env.local
+backend/.env.*.local
+
+# Exclude Prisma generated files (if any)
+backend/prisma/migrations/
+
+# Exclude any backend-specific config files
+backend/tsconfig.json
+backend/package-lock.json
+
+# Standard Next.js ignores (already in .gitignore but good to be explicit)
+.next/
+out/
+node_modules/
+.env*.local
+
