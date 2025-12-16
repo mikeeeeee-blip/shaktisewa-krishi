@@ -201,6 +201,7 @@ export default function CareersPage() {
             <div className="flex items-center gap-2 text-green-600 font-semibold">
               <Mail className="w-5 h-5" />
               <a href="mailto:careers@shaktisewa.com" className="hover:underline">careers@shaktisewa.com</a>
+              
             </div>
           </div>
         </div>
