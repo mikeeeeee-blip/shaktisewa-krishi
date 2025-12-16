@@ -43,6 +43,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Check if user is authenticated on mount
   useEffect(() => {
     const checkAuth = async () => {
+      // Only access localStorage on client side
+      if (typeof window === 'undefined') {
+        setLoading(false);
+        return;
+      }
+
       const token = localStorage.getItem('accessToken');
       if (token) {
         try {
@@ -52,8 +58,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         } catch (error) {
           console.error('Auth check failed:', error);
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+          }
         }
       }
       setLoading(false);
@@ -68,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.success && response.data) {
         setUser(response.data.user);
         // Store tokens if provided
-        if (response.data.tokens) {
+        if (response.data.tokens && typeof window !== 'undefined') {
           localStorage.setItem('accessToken', response.data.tokens.accessToken);
           localStorage.setItem('refreshToken', response.data.tokens.refreshToken);
         }
@@ -85,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.success && response.data) {
         setUser(response.data.user);
         // Store tokens if provided
-        if (response.data.tokens) {
+        if (response.data.tokens && typeof window !== 'undefined') {
           localStorage.setItem('accessToken', response.data.tokens.accessToken);
           localStorage.setItem('refreshToken', response.data.tokens.refreshToken);
         }
@@ -103,8 +111,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Logout error:', error);
     } finally {
       setUser(null);
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+      }
       router.push('/');
     }
   };
