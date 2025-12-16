@@ -390,16 +390,16 @@ const Footer = () => {
                 <li className="flex items-center gap-2 sm:gap-3">
                   <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-gray-300 flex-shrink-0" />
                   <a 
-                    href="tel:+917049407951" 
+                    href="tel:+9243143997" 
                     className="text-sm sm:text-base text-gray-200 hover:text-white hover:underline transition-all duration-200"
                   >
-                    +91 7049407951
+                    +91 9243143997
                   </a>
                 </li>
               </ul>
               <div className="mt-4 sm:mt-5 pt-3 sm:pt-4 border-t border-gray-600">
                 <p className="text-xs sm:text-sm text-gray-300 italic">
-                  Owner and Managed by<br />
+                  Managed by<br />
                   <span className="font-semibold text-white">ShaktiSewa</span>
                 </p>
               </div>
