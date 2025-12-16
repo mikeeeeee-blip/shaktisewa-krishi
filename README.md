@@ -1,2 +1,0 @@
-# shaktisewa-krishi
-# shaktisewa-krishi
