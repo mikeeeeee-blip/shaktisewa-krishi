@@ -10,6 +10,7 @@ import ProductCard from '@/components/ProductCard';
 import { productData } from '@/data/products';
 import { Tag, Percent, ShoppingBag, Grid, List } from 'lucide-react';
 
+
 export default function EclatSalePage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 

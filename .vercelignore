@@ -7,6 +7,7 @@ backend/node_modules/
 # Exclude backend dist (compiled files)
 backend/dist/
 
+
 # Exclude backend build artifacts
 backend/*.log
 backend/.env
