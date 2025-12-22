@@ -108,44 +108,65 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    // Add order_meta - Cashfree requires return_url for valid payment sessions
-    // For localhost + production, we'll use a placeholder or require ngrok
+    // Add order_meta - Cashfree REQUIRES return_url for valid payment sessions
+    // Without a valid return_url, the session will be invalid
+    let returnUrl: string | null = null;
+    let notifyUrl: string | null = null;
+
     if (origin && origin.startsWith('https://')) {
-      orderData.order_meta = {
-        return_url: `${origin}/api/payments/verify?order_id={order_id}`,
-        notify_url: `${origin}/api/payments/webhook`,
-      };
+      // Valid HTTPS URL
+      returnUrl = `${origin}/api/payments/verify?order_id={order_id}`;
+      notifyUrl = `${origin}/api/payments/webhook`;
     } else if (origin && CASHFREE_ENV === 'SANDBOX') {
-      // For sandbox, try with HTTP localhost (might work)
+      // For sandbox, HTTP localhost might work
       const protocol = origin.startsWith('http') ? '' : 'http://';
-      orderData.order_meta = {
-        return_url: `${protocol}${origin}/api/payments/verify?order_id={order_id}`,
-        notify_url: `${protocol}${origin}/api/payments/webhook`,
-      };
+      returnUrl = `${protocol}${origin}/api/payments/verify?order_id={order_id}`;
+      notifyUrl = `${protocol}${origin}/api/payments/webhook`;
     } else {
-      // For localhost + production without ngrok, we MUST have a valid HTTPS return_url
-      // Use a placeholder or throw an error
+      // For localhost + production, check for ngrok
       const ngrokUrl = process.env.NGROK_URL;
       if (ngrokUrl) {
-        orderData.order_meta = {
-          return_url: `${ngrokUrl}/api/payments/verify?order_id={order_id}`,
-          notify_url: `${ngrokUrl}/api/payments/webhook`,
-        };
+        returnUrl = `${ngrokUrl}/api/payments/verify?order_id={order_id}`;
+        notifyUrl = `${ngrokUrl}/api/payments/webhook`;
       } else {
-        // For production, return_url is required for valid sessions
-        // Provide a fallback HTTPS URL or require ngrok
-        console.error('Production Cashfree requires HTTPS return_url. Please set NGROK_URL or use SANDBOX environment.');
+        // For production without ngrok, we MUST fail - sessions won't work without return_url
+        console.error('Production Cashfree requires HTTPS return_url. Session will be invalid without it.');
         return NextResponse.json(
           {
             success: false,
-            message: 'HTTPS return_url required for production. Please set NGROK_URL environment variable or use SANDBOX environment for local testing.',
+            message: 'HTTPS return_url required for production Cashfree. Sessions are invalid without a valid return_url.',
             details: {
-              solution: 'Set NGROK_URL=https://your-ngrok-url.ngrok.io in .env.local, or change CASHFREE_ENV=SANDBOX',
+              error: 'client session is invalid',
+              solution: 'Set NGROK_URL=https://your-ngrok-url.ngrok.io in .env.local, or change CASHFREE_ENV=SANDBOX for local testing',
+              note: 'Cashfree requires a valid HTTPS return_url to create valid payment sessions. Without it, you will get "client session is invalid" error.',
             },
           },
           { status: 400 }
         );
       }
+    }
+
+    // Always set order_meta with return_url - this is REQUIRED for valid sessions
+    if (returnUrl) {
+      orderData.order_meta = {
+        return_url: returnUrl,
+        notify_url: notifyUrl || returnUrl.replace('/verify', '/webhook'),
+      };
+      console.log('Setting order_meta with return_url:', {
+        return_url: returnUrl,
+        notify_url: notifyUrl,
+        env: CASHFREE_ENV,
+      });
+    } else {
+      // This should never happen due to check above, but just in case
+      console.error('No return_url available - session will be invalid');
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Unable to set return_url. Payment session cannot be created.',
+        },
+        { status: 400 }
+      );
     }
 
     console.log('Creating Cashfree payment session (v2023-08-01):', {
