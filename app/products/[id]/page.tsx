@@ -13,6 +13,7 @@ import { productData } from '@/data/products';
 import { useCart } from '@/contexts/CartContext';
 import { useRouter } from 'next/navigation';
 import Toast from '@/components/Toast';
+import { getDisplayPrice } from '@/lib/utils/pricing';
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -55,8 +56,15 @@ export default function ProductDetailPage() {
     );
   }
 
+  // Get display price with estimation if needed
+  const { price: displayPrice, isEstimated } = getDisplayPrice(selectedVariantData, {
+    originalPrice: product.originalPrice,
+    discountPercent: product.discountPercent,
+    currentPrice: product.currentPrice,
+  });
+
   const handleAddToCart = () => {
-    if (!selectedVariantData || selectedVariantData.price === null) return; // Don't add if price is null
+    if (!selectedVariantData || displayPrice === null) return; // Don't add if price is null
     addToCart({
       productId: product.id,
       name: product.name,
@@ -64,7 +72,7 @@ export default function ProductDetailPage() {
       image: productImage,
       variant: selectedVariantData.name,
       quantity: selectedVariantData.quantity,
-      price: selectedVariantData.price,
+      price: displayPrice, // Use estimated price if original was invalid
       originalPrice: product.originalPrice,
     });
     setShowToast(true);
@@ -186,11 +194,16 @@ export default function ProductDetailPage() {
 
             {/* Price */}
             <div className="mb-6">
-              {selectedVariantData.price !== null ? (
+              {displayPrice !== null ? (
                 <>
                   <div className="flex items-baseline gap-3 mb-2">
                     <span className="text-3xl font-bold text-gray-900">
-                      ₹{selectedVariantData.price}
+                      ₹{displayPrice}
+                      {isEstimated && (
+                        <span className="text-sm text-orange-600 ml-2" title="Estimated price">
+                          *
+                        </span>
+                      )}
                     </span>
                     <span className="text-xl text-gray-500 line-through">
                       ₹{product.originalPrice}
@@ -199,6 +212,11 @@ export default function ProductDetailPage() {
                   {product.discount > 0 && (
                     <p className="text-green-600 font-semibold mb-1">
                       You save ₹{product.discount} ({product.discountPercent}% off)
+                    </p>
+                  )}
+                  {isEstimated && (
+                    <p className="text-orange-600 text-sm mb-1">
+                      * Estimated price based on product specifications
                     </p>
                   )}
                   {product.freeDelivery && (
@@ -229,7 +247,16 @@ export default function ProductDetailPage() {
                       <div className="font-semibold text-sm">{variant.name}</div>
                       <div className="text-xs text-gray-600 mt-1">{variant.quantity}</div>
                         <div className="text-sm font-bold mt-1">
-                        {variant.price !== null ? `₹${variant.price}` : 'Price N/A'}
+                        {(() => {
+                          const { price: varDisplayPrice, isEstimated: varIsEstimated } = getDisplayPrice(variant, {
+                            originalPrice: product.originalPrice,
+                            discountPercent: product.discountPercent,
+                            currentPrice: product.currentPrice,
+                          });
+                          return varDisplayPrice !== null 
+                            ? `₹${varDisplayPrice}${varIsEstimated ? '*' : ''}` 
+                            : 'Price N/A';
+                        })()}
                       </div>
                       {'isBestSeller' in variant && variant.isBestSeller && (
                         <span className="inline-block mt-1 bg-red-500 text-white text-xs px-2 py-0.5 rounded">

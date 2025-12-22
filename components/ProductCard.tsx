@@ -6,6 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useCart } from '@/contexts/CartContext';
 import Toast from './Toast';
+import { getDisplayPrice } from '@/lib/utils/pricing';
 
 interface ProductVariant {
   name: string;
@@ -50,10 +51,17 @@ export default function ProductCard({ product }: ProductCardProps) {
     return null;
   }
 
+  // Get display price with estimation if needed
+  const { price: displayPrice, isEstimated } = getDisplayPrice(selectedVariant, {
+    originalPrice: product.originalPrice,
+    discountPercent: product.discountPercent,
+    currentPrice: product.currentPrice,
+  });
+
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!selectedVariant || selectedVariant.price === null) return; // Don't add if price is null
+    if (!selectedVariant || displayPrice === null) return; // Don't add if price is null
     addToCart({
       productId: product.id,
       name: product.name,
@@ -61,7 +69,7 @@ export default function ProductCard({ product }: ProductCardProps) {
       image: productImage,
       variant: selectedVariant.name,
       quantity: selectedVariant.quantity,
-      price: selectedVariant.price,
+      price: displayPrice, // Use estimated price if original was invalid
       originalPrice: product.originalPrice,
     });
     setShowToast(true);
@@ -135,11 +143,16 @@ export default function ProductCard({ product }: ProductCardProps) {
           )}
 
           {/* Price Section - Clear pricing */}
-          <div className="mb-1 sm:mb-1.5 flex items-baseline gap-1 sm:gap-1.5">
-            {selectedVariant.price !== null ? (
+          <div className="mb-1 sm:mb-1.5 flex items-baseline gap-1 sm:gap-1.5 flex-wrap">
+            {displayPrice !== null ? (
               <>
                 <span className="text-xs sm:text-sm md:text-base font-bold text-gray-900">
-                  ₹{selectedVariant.price}
+                  ₹{displayPrice}
+                  {isEstimated && (
+                    <span className="text-[8px] sm:text-[9px] text-orange-600 ml-1" title="Estimated price">
+                      *
+                    </span>
+                  )}
                 </span>
                 <span className="text-[10px] sm:text-xs text-gray-500 line-through">
                   ₹{product.originalPrice}
@@ -158,10 +171,10 @@ export default function ProductCard({ product }: ProductCardProps) {
           {/* Add to Cart Button - Optimized size */}
           <button
             onClick={handleAddToCart}
-            disabled={selectedVariant.price === null}
+            disabled={displayPrice === null}
             className="w-full bg-[#16a34a] hover:bg-[#15803d] disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-[10px] sm:text-xs font-semibold py-1.5 sm:py-2 md:py-2.5 rounded-md transition-all duration-200 mt-auto flex items-center justify-center shadow-sm hover:shadow-md"
           >
-            {selectedVariant.price === null ? 'Out of Stock' : 'Add to Cart'}
+            {displayPrice === null ? 'Out of Stock' : 'Add to Cart'}
           </button>
         </div>
       </div>
