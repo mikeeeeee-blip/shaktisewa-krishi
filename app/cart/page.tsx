@@ -12,8 +12,10 @@ import Footer from '@/components/Footer';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { createOrder } from '@/lib/api/orders';
+import { createPaymentSession } from '@/lib/api/payments';
+import { updatePaymentStatus } from '@/lib/api/orders';
 
-type PaymentMethod = 'cod' | 'online' | 'upi';
+type PaymentMethod = 'cod' | 'online' | 'upi' | 'cashfree';
 
 interface ShippingAddress {
   fullName: string;
@@ -81,6 +83,76 @@ export default function CartPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Handle payment redirect callbacks
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentStatus = params.get('payment_status');
+    const orderId = params.get('order_id');
+    const paymentId = params.get('payment_id');
+    const error = params.get('error');
+    const reason = params.get('reason');
+
+    if (paymentStatus === 'success' && orderId) {
+      // Payment successful - update order and show success
+      handlePaymentSuccess(orderId, paymentId || '');
+      // Clean URL
+      window.history.replaceState({}, '', '/cart');
+    } else if (paymentStatus === 'failed' && orderId) {
+      // Payment failed
+      setError(reason || 'Payment failed. Please try again.');
+      // Clean URL
+      window.history.replaceState({}, '', '/cart');
+    } else if (error) {
+      setError(error);
+      // Clean URL
+      window.history.replaceState({}, '', '/cart');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handlePaymentSuccess = async (orderId: string, paymentId: string) => {
+    try {
+      const totalPrice = getTotalPrice();
+      const deliveryCharges = 0;
+      const onlineDiscount = 30;
+      const finalTotal = totalPrice + deliveryCharges - onlineDiscount;
+
+      // Update payment status in backend
+      if (orderId && paymentId) {
+        try {
+          await updatePaymentStatus(orderId, 'PAID', paymentId);
+        } catch (error) {
+          console.error('Error updating payment status:', error);
+          // Continue even if update fails
+        }
+      }
+
+      // Use orderId as orderNumber
+      setOrderData({
+        orderNumber: orderId,
+        paymentMethod: 'ONLINE',
+        paymentId,
+        totalAmount: finalTotal,
+      });
+
+      setOrderPlaced(true);
+      clearCart();
+    } catch (error) {
+      console.error('Error handling payment success:', error);
+      // Still show success since payment was successful
+      const totalPrice = getTotalPrice();
+      const finalTotal = totalPrice - 30; // Online discount
+      setOrderData({
+        orderNumber: orderId,
+        paymentMethod: 'ONLINE',
+        paymentId,
+        totalAmount: finalTotal,
+      });
+      setOrderPlaced(true);
+      clearCart();
+    }
+  };
+
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
@@ -102,6 +174,12 @@ export default function CartPage() {
     
     if (!isAuthenticated) {
       router.push('/login?redirect=/cart');
+      return;
+    }
+
+    // Handle Cashfree payment separately
+    if (paymentMethod === 'cashfree') {
+      await handleCashfreeCheckout();
       return;
     }
 
@@ -167,6 +245,71 @@ export default function CartPage() {
     }
   };
 
+  const handleCashfreeCheckout = async () => {
+    if (!isAuthenticated) {
+      router.push('/login?redirect=/cart');
+      return;
+    }
+
+    setIsProcessing(true);
+    setError(null);
+
+    try {
+      const totalPrice = getTotalPrice();
+      const deliveryCharges = 0;
+      const onlineDiscount = 30;
+      const finalTotal = totalPrice + deliveryCharges - onlineDiscount;
+
+      // Prepare order items
+      const orderItems = items.map(item => ({
+        productId: item.productId,
+        variantId: undefined,
+        quantity: item.count,
+      }));
+
+      // Prepare shipping address
+      const shippingAddr = {
+        fullName: shippingAddress.fullName,
+        phone: shippingAddress.phone,
+        addressLine1: shippingAddress.address,
+        city: shippingAddress.city,
+        state: shippingAddress.state,
+        pincode: shippingAddress.pincode,
+        country: 'India',
+      };
+
+      // Generate unique order ID
+      const orderId = `ORDER_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Create payment session
+      const paymentResponse = await createPaymentSession({
+        orderId,
+        orderAmount: finalTotal,
+        customerDetails: {
+          customerId: user?.id || user?._id || `user_${Date.now()}`,
+          customerName: shippingAddress.fullName,
+          customerEmail: shippingAddress.email,
+          customerPhone: shippingAddress.phone,
+        },
+        shippingAddress: shippingAddr,
+        billingAddress: shippingAddr,
+        items: orderItems,
+      });
+
+      if (paymentResponse.success && paymentResponse.data?.paymentLink) {
+        // Redirect to Cashfree payment page
+        window.location.href = paymentResponse.data.paymentLink;
+      } else {
+        setError(paymentResponse.message || 'Failed to initiate payment. Please try again.');
+        setIsProcessing(false);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to initiate payment. Please try again.');
+      console.error('Cashfree checkout error:', err);
+      setIsProcessing(false);
+    }
+  };
+
   const handleCloseOrderSuccess = () => {
     setOrderPlaced(false);
     setShowCheckout(false);
@@ -203,7 +346,7 @@ export default function CartPage() {
   const totalPrice = getTotalPrice();
   const deliveryCharges = 0; // Free delivery
   const codCharges = paymentMethod === 'cod' ? 0 : 0; // Can add COD charges if needed
-  const onlineDiscount = paymentMethod === 'online' ? 30 : paymentMethod === 'upi' ? 30 : 0;
+  const onlineDiscount = paymentMethod === 'online' ? 30 : paymentMethod === 'upi' ? 30 : paymentMethod === 'cashfree' ? 30 : 0;
   const finalTotal = totalPrice + deliveryCharges + codCharges - onlineDiscount;
 
   // Order Success Modal
@@ -617,6 +760,32 @@ export default function CartPage() {
                         </div>
                       </div>
                     </label>
+
+                    {/* Cashfree Payment */}
+                    <label className={`flex items-start gap-4 p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                      paymentMethod === 'cashfree' ? 'border-green-600 bg-green-50' : 'border-gray-200 hover:border-gray-300'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="payment"
+                        value="cashfree"
+                        checked={paymentMethod === 'cashfree'}
+                        onChange={() => setPaymentMethod('cashfree')}
+                        className="mt-1 w-5 h-5 text-green-600 focus:ring-green-500"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
+                            <CreditCard className="w-6 h-6 text-indigo-600" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-gray-900">Cashfree Payment</h3>
+                            <p className="text-sm text-gray-600">Cards, UPI, Wallets, Net Banking</p>
+                            <span className="inline-block mt-1 text-xs font-semibold text-green-600 bg-green-100 px-2 py-0.5 rounded">Save ₹30</span>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
                   </div>
                 </div>
 
@@ -706,7 +875,11 @@ export default function CartPage() {
                     </>
                   ) : (
                     <>
-                      {paymentMethod === 'cod' ? 'Place Order (COD)' : 'Pay & Place Order'}
+                      {paymentMethod === 'cod' 
+                        ? 'Place Order (COD)' 
+                        : paymentMethod === 'cashfree'
+                        ? 'Pay with Cashfree'
+                        : 'Pay & Place Order'}
                     </>
                   )}
                 </button>
