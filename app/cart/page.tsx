@@ -286,7 +286,7 @@ export default function CartPage() {
         orderId,
         orderAmount: finalTotal,
         customerDetails: {
-          customerId: user?.id || user?._id || `user_${Date.now()}`,
+          customerId: user?.id || `user_${Date.now()}`,
           customerName: shippingAddress.fullName,
           customerEmail: shippingAddress.email,
           customerPhone: shippingAddress.phone,
