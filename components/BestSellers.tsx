@@ -468,7 +468,7 @@ export default function BestSellers() {
         
         // Log additional details for debugging
         if (process.env.NODE_ENV === 'development') {
-          const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
+          const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api-krishi.vercel.app/api/v1';
           console.error('API URL:', apiUrl);
           console.error('Full error:', err);
           console.warn('Using fallback products data due to API error');
