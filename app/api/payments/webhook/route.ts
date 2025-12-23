@@ -104,13 +104,6 @@ export async function POST(request: NextRequest) {
       // Still return success to Cashfree to avoid retries for our errors
     }
 
-    // Handle different webhook event types (legacy - keeping for reference)
-    if (type === 'PAYMENT_SUCCESS_WEBHOOK' || type === 'PAYMENT_USER_CONFIRMED') {
-      // Already handled above
-    }
-    } else if (type === 'PAYMENT_FAILED_WEBHOOK' || type === 'PAYMENT_USER_DROPPED') {
-      // Already handled in the unified handler above
-    }
 
     // Always return success to Cashfree
     return NextResponse.json({ success: true, message: 'Webhook processed' });
