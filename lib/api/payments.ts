@@ -40,6 +40,9 @@ export interface CreatePaymentSessionResponse {
   paymentSessionId: string;
   paymentLink: string;
   orderId: string;
+  environment?: 'sandbox' | 'production';
+  cfOrderId?: string;
+  orderStatus?: string;
 }
 
 /**
