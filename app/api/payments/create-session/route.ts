@@ -338,23 +338,80 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { payment_session_id, payment_link } = cashfreeResponse.data;
+    // Log the full response for debugging
+    console.log('✅ Cashfree order created successfully');
+    console.log('Full Cashfree response:', JSON.stringify(cashfreeResponse.data, null, 2));
 
+    const { 
+      payment_session_id, 
+      payment_link,
+      cf_order_id,
+      order_status,
+      order_id: cfOrderId,
+      order_amount,
+      order_currency,
+      order_meta: responseOrderMeta
+    } = cashfreeResponse.data;
+
+    // Verify order was created successfully
     if (!payment_session_id) {
-      console.error('Invalid Cashfree response - missing payment_session_id:', cashfreeResponse.data);
+      console.error('❌ Invalid Cashfree response - missing payment_session_id:', cashfreeResponse.data);
       return NextResponse.json(
-        { success: false, message: 'Failed to create payment session - invalid response from Cashfree' },
+        { 
+          success: false, 
+          message: 'Failed to create payment session - invalid response from Cashfree',
+          details: 'Missing payment_session_id in response'
+        },
         { status: 500 }
       );
     }
 
-    // Construct payment link if not provided in response
+    // Verify order status is ACTIVE
+    if (order_status && order_status !== 'ACTIVE') {
+      console.warn('⚠️ Cashfree order status is not ACTIVE:', order_status);
+      console.warn('   Order Status:', order_status);
+      console.warn('   CF Order ID:', cf_order_id);
+      // Still proceed, but log the warning
+    }
+
+    console.log('📋 Order Details:');
+    console.log('   CF Order ID:', cf_order_id);
+    console.log('   Order Status:', order_status || 'Not provided');
+    console.log('   Order ID:', cfOrderId || orderId);
+    console.log('   Payment Session ID:', payment_session_id);
+    console.log('   Payment Link (from response):', payment_link || 'Not provided');
+
+    // Construct payment link
+    // Priority 1: Use payment_link from Cashfree response if provided (most reliable)
+    // Priority 2: Construct using payment_session_id
     // Cashfree payment link format for user-facing checkout page
-    // According to Cashfree docs: Use payment_session_id directly in the checkout URL
     // Production: https://payments.cashfree.com/order/#{payment_session_id}
     // Sandbox: https://sandbox.cashfree.com/pg/checkout/payment-link/{payment_session_id}
     let finalPaymentLink = payment_link;
-    if (!finalPaymentLink && payment_session_id) {
+    
+    if (finalPaymentLink) {
+      console.log('✅ Using payment_link from Cashfree response');
+      console.log('   Original payment_link:', finalPaymentLink);
+      
+      // Verify the payment_link format is correct for production
+      if (CASHFREE_ENV === 'PRODUCTION') {
+        // Ensure it uses the correct format with #payment_session_id
+        if (finalPaymentLink.includes('order_token=')) {
+          // Extract session ID from order_token parameter if present
+          const urlMatch = finalPaymentLink.match(/order_token=([^&]+)/);
+          if (urlMatch && urlMatch[1]) {
+            const extractedSessionId = decodeURIComponent(urlMatch[1]);
+            finalPaymentLink = `https://payments.cashfree.com/order/#${extractedSessionId}`;
+            console.log('   ✅ Converted to correct format: #payment_session_id');
+          }
+        } else if (!finalPaymentLink.includes('#')) {
+          // If no hash, add it with payment_session_id
+          finalPaymentLink = `https://payments.cashfree.com/order/#${payment_session_id}`;
+          console.log('   ✅ Added #payment_session_id to URL');
+        }
+      }
+    } else if (payment_session_id) {
+      // Construct payment link from payment_session_id
       if (CASHFREE_ENV === 'PRODUCTION') {
         // Production payment checkout page URL - use payment_session_id directly after #
         // Format: https://payments.cashfree.com/order/#{payment_session_id}
@@ -363,29 +420,13 @@ export async function POST(request: NextRequest) {
         // Sandbox payment checkout page URL
         finalPaymentLink = `https://sandbox.cashfree.com/pg/checkout/payment-link/${payment_session_id}`;
       }
-      console.log('Constructed payment link from payment_session_id:', {
-        orderId,
-        payment_session_id,
-        payment_link: finalPaymentLink,
-        env: CASHFREE_ENV,
-      });
-    } else if (finalPaymentLink && CASHFREE_ENV === 'PRODUCTION') {
-      // If Cashfree provided a payment_link, use it as-is
-      // But ensure it follows the correct format: #payment_session_id (no order_token param)
-      if (finalPaymentLink.includes('order_token=')) {
-        // Extract session ID from order_token parameter if present
-        const urlMatch = finalPaymentLink.match(/order_token=([^&]+)/);
-        if (urlMatch && urlMatch[1]) {
-          const extractedSessionId = decodeURIComponent(urlMatch[1]);
-          finalPaymentLink = `https://payments.cashfree.com/order/#${extractedSessionId}`;
-          console.log('Converted payment link to use #payment_session_id format:', finalPaymentLink);
-        }
-      } else if (!finalPaymentLink.includes(`#${payment_session_id}`) && payment_session_id) {
-        // Ensure it uses the payment_session_id in hash format
-        finalPaymentLink = `https://payments.cashfree.com/order/#${payment_session_id}`;
-        console.log('Updated payment link to use #payment_session_id format:', finalPaymentLink);
-      }
+      console.log('✅ Constructed payment link from payment_session_id');
     }
+
+    console.log('\n🔗 Final Payment Link:');
+    console.log('   URL:', finalPaymentLink);
+    console.log('   Contains payment_session_id:', finalPaymentLink?.includes(payment_session_id) ? 'Yes' : 'No');
+    console.log('   Format correct:', finalPaymentLink?.startsWith('https://payments.cashfree.com/order/#') || finalPaymentLink?.startsWith('https://sandbox.cashfree.com/') ? 'Yes' : 'No');
 
     // Helper function to validate MongoDB ObjectId format
     const isValidObjectId = (id: string): boolean => {
@@ -445,13 +486,38 @@ export async function POST(request: NextRequest) {
       console.error('Backend order creation failed:', error);
     }
 
+    // Verify we have a valid payment link before returning
+    if (!finalPaymentLink) {
+      console.error('❌ Failed to construct payment link');
+      return NextResponse.json(
+        { 
+          success: false, 
+          message: 'Failed to generate payment link. Please check Cashfree configuration.',
+          details: 'Payment link could not be constructed from Cashfree response'
+        },
+        { status: 500 }
+      );
+    }
+
+    console.log('\n✅ Payment session created successfully');
+    console.log('   Final Payment Link:', finalPaymentLink);
+    console.log('   CF Order ID:', cf_order_id || 'Not provided');
+    console.log('   Order Status:', order_status || 'Not provided');
+
     return NextResponse.json({
       success: true,
       data: {
         paymentSessionId: payment_session_id,
         paymentLink: finalPaymentLink,
-        orderId,
+        orderId: cfOrderId || orderId,
+        cfOrderId: cf_order_id,
+        orderStatus: order_status,
       },
+      // Add troubleshooting info if order status is not ACTIVE
+      ...(order_status && order_status !== 'ACTIVE' ? {
+        warning: `Order status is '${order_status}' instead of 'ACTIVE'. This may cause payment issues.`,
+        troubleshooting: 'Please verify your Cashfree account configuration and ensure transactions are enabled.'
+      } : {})
     });
   } catch (error: any) {
     console.error('Error creating payment session:', error);
