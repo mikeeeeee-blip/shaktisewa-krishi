@@ -26,7 +26,28 @@ function PaymentCallbackContent() {
         // Notify backend about payment callback
         // The backend will verify with Cashfree and update transaction status
         // Cashfree redirects with order_id, backend will find transaction by order_id
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || 'http://localhost:5001';
+        // Use environment variable for backend URL, fallback to detecting from current location
+        const getBackendUrl = () => {
+            // Priority: NEXT_PUBLIC_BACKEND_URL > BACKEND_URL > detect from current location
+            if (typeof window !== 'undefined') {
+                if (process.env.NEXT_PUBLIC_BACKEND_URL) {
+                    return process.env.NEXT_PUBLIC_BACKEND_URL;
+                }
+                if (process.env.BACKEND_URL) {
+                    return process.env.BACKEND_URL;
+                }
+                // Detect from current location - if on localhost, use localhost backend
+                const currentHost = window.location.hostname;
+                if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
+                    return 'http://localhost:5001';
+                }
+                // For production, use the same domain with API path or default
+                return 'https://api.himora.art';
+            }
+            return 'http://localhost:5001'; // Server-side fallback
+        };
+        
+        const backendUrl = getBackendUrl();
         let callbackUrl = `${backendUrl}/api/cashfree/callback`;
         
         // Add parameters - prefer transaction_id if available, otherwise use order_id

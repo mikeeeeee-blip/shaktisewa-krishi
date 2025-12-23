@@ -56,18 +56,48 @@ export async function POST(request: NextRequest) {
     
     console.log('   ✅ Validation Passed');
 
-    // Check if credentials are configured
+    // Validate credentials are configured
     if (!CASHFREE_APP_ID || !CASHFREE_SECRET_KEY) {
-      console.error('Cashfree credentials missing:', {
+      console.error('❌ Cashfree credentials missing:', {
         hasAppId: !!CASHFREE_APP_ID,
         hasSecretKey: !!CASHFREE_SECRET_KEY,
         env: CASHFREE_ENV,
+        expectedTestCredentials: CASHFREE_ENV === 'SANDBOX',
       });
       return NextResponse.json(
-        { success: false, message: 'Cashfree credentials not configured. Please check your environment variables.' },
+        { 
+          success: false, 
+          message: `Cashfree ${CASHFREE_ENV === 'SANDBOX' ? 'sandbox' : 'production'} credentials not configured. Please check your environment variables.`,
+          details: CASHFREE_ENV === 'SANDBOX' 
+            ? 'Required: TEST_CASHFREE_APP_ID and TEST_CASHFREE_SECRET_KEY'
+            : 'Required: CASHFREE_APP_ID and CASHFREE_SECRET_KEY'
+        },
         { status: 500 }
       );
     }
+
+    // Validate sandbox credentials format when in SANDBOX mode
+    if (CASHFREE_ENV === 'SANDBOX') {
+      const isTestAppId = CASHFREE_APP_ID?.startsWith('TEST') || CASHFREE_APP_ID?.includes('test');
+      const isTestSecretKey = CASHFREE_SECRET_KEY?.includes('_test_') || CASHFREE_SECRET_KEY?.includes('test');
+      
+      if (!isTestAppId || !isTestSecretKey) {
+        console.warn('⚠️ Warning: CASHFREE_ENV is SANDBOX but credentials may not be sandbox credentials');
+        console.warn('   App ID starts with TEST:', isTestAppId);
+        console.warn('   Secret Key contains "_test_":', isTestSecretKey);
+        console.warn('   This may cause authentication errors with Cashfree sandbox API');
+      } else {
+        console.log('✅ Sandbox credentials validated - using test credentials');
+      }
+    }
+
+    console.log('✅ Cashfree credentials configured:', {
+      env: CASHFREE_ENV,
+      hasAppId: !!CASHFREE_APP_ID,
+      hasSecretKey: !!CASHFREE_SECRET_KEY,
+      appIdPrefix: CASHFREE_APP_ID?.substring(0, 10) + '...',
+      secretKeyPrefix: CASHFREE_SECRET_KEY?.substring(0, 10) + '...',
+    });
 
     // Get the base URL for redirect
     // Cashfree REQUIRES publicly accessible HTTPS URLs for return_url (even in sandbox)
@@ -146,21 +176,30 @@ export async function POST(request: NextRequest) {
     let returnUrl: string | null = null;
     let notifyUrl: string | null = null;
 
+    // For SANDBOX mode, allow localhost or use default production URL
+    // For PRODUCTION mode, require public HTTPS URL
     if (!origin || origin.includes('localhost')) {
-      // If we still have localhost, fail with helpful error message
-      console.error('❌ Cannot use localhost as return_url. Cashfree requires publicly accessible HTTPS URL.');
-      return NextResponse.json(
-        {
-          success: false,
-          message: 'Public HTTPS URL required for Cashfree return_url. Localhost is not accessible.',
-          details: {
-            error: 'client session is invalid',
-            solution: 'Set NEXT_PUBLIC_WEBSITE_URL=https://www.shaktisewafoudation.in in .env, or use NGROK_URL for local testing',
-            note: 'Cashfree requires a publicly accessible HTTPS return_url. Set NEXT_PUBLIC_WEBSITE_URL to your production website URL.',
+      if (CASHFREE_ENV === 'SANDBOX') {
+        // In sandbox, use default production URL as fallback (works for testing)
+        origin = 'https://www.shaktisewafoudation.in';
+        console.log('⚠️ Using localhost detected in SANDBOX mode, falling back to default production URL:', origin);
+        console.log('   Note: For local testing with sandbox, consider using ngrok or set NGROK_URL in .env');
+      } else {
+        // In production mode, require public HTTPS URL
+        console.error('❌ Cannot use localhost as return_url in PRODUCTION mode. Cashfree requires publicly accessible HTTPS URL.');
+        return NextResponse.json(
+          {
+            success: false,
+            message: 'Public HTTPS URL required for Cashfree return_url. Localhost is not accessible in production mode.',
+            details: {
+              error: 'client session is invalid',
+              solution: 'Set NEXT_PUBLIC_WEBSITE_URL=https://www.shaktisewafoudation.in in .env, or use NGROK_URL for local testing',
+              note: 'Cashfree requires a publicly accessible HTTPS return_url. Set NEXT_PUBLIC_WEBSITE_URL to your production website URL.',
+            },
           },
-        },
-        { status: 400 }
-      );
+          { status: 400 }
+        );
+      }
     }
 
     // Both return_url and notify_url must be HTTPS and publicly accessible

@@ -112,17 +112,30 @@ function CheckoutContent() {
         console.log('API Response:', JSON.stringify(result, null, 2));
 
         if (!result.success) {
-          throw new Error(result.message || 'Failed to create payment session');
+          const errorMsg = result.message || result.details || 'Failed to create payment session';
+          console.error('❌ API returned error:', errorMsg);
+          console.error('   Full error response:', JSON.stringify(result, null, 2));
+          throw new Error(errorMsg);
         }
 
         const sessionId = result.data?.paymentSessionId;
         if (!sessionId) {
-          console.error('No paymentSessionId in response.data:', result);
-          throw new Error('Payment session ID not received from API');
+          console.error('❌ No paymentSessionId in response.data:', JSON.stringify(result, null, 2));
+          console.error('   Response keys:', Object.keys(result));
+          throw new Error('Payment session ID not received from API. Check server logs for details.');
         }
 
         // Clean the session ID - only trim whitespace, preserve all characters
         const cleanSessionId = String(sessionId).trim();
+        
+        // Log session ID details for debugging
+        console.log('✅ Payment Session ID received:');
+        console.log('   - Length:', cleanSessionId.length);
+        console.log('   - Starts with session_:', cleanSessionId.startsWith('session_'));
+        console.log('   - Preview:', cleanSessionId.substring(0, 50) + '...');
+        console.log('   - Environment from API:', result.data?.environment);
+        console.log('   - Order ID:', result.data?.orderId);
+        console.log('   - CF Order ID:', result.data?.cfOrderId);
         
         if (!cleanSessionId || !cleanSessionId.startsWith('session_')) {
           console.error('Invalid payment session ID format:', cleanSessionId.substring(0, 50));
@@ -209,7 +222,12 @@ function CheckoutContent() {
             redirectTarget: checkoutOptions.redirectTarget,
           });
 
-          cashfree.checkout(checkoutOptions);
+          cashfree.checkout(checkoutOptions).catch((checkoutError: any) => {
+            console.error('Cashfree checkout error:', checkoutError);
+            // Cashfree SDK errors are usually in the error object
+            const errorMessage = checkoutError?.message || checkoutError?.error?.message || 'Unknown error from Cashfree';
+            setError(`Cashfree checkout error: ${errorMessage}. Please try again or contact support.`);
+          });
         } catch (error: any) {
           console.error('Error opening Cashfree checkout:', error);
           setError(`Failed to initialize payment: ${error.message || 'Unknown error'}`);
