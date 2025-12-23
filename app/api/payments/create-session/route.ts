@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 
-const CASHFREE_APP_ID = process.env.CASHFREE_APP_ID;
-const CASHFREE_SECRET_KEY = process.env.CASHFREE_SECRET_KEY;
 const CASHFREE_ENV = process.env.CASHFREE_ENV || 'SANDBOX'; // SANDBOX or PRODUCTION
+
+// Use TEST_ prefixed credentials when in SANDBOX mode, otherwise use production credentials
+const CASHFREE_APP_ID = CASHFREE_ENV === 'SANDBOX' 
+  ? process.env.TEST_CASHFREE_APP_ID || process.env.CASHFREE_APP_ID
+  : process.env.CASHFREE_APP_ID;
+const CASHFREE_SECRET_KEY = CASHFREE_ENV === 'SANDBOX'
+  ? process.env.TEST_CASHFREE_SECRET_KEY || process.env.CASHFREE_SECRET_KEY
+  : process.env.CASHFREE_SECRET_KEY;
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-krishi.vercel.app/api/v1';
 
 // Cashfree API base URLs - Updated according to official docs
@@ -47,51 +53,60 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the base URL for redirect
-    // Cashfree requires HTTPS URLs, so we need to handle localhost specially
-    let origin: string | null = request.headers.get('origin') || request.headers.get('host') || 'localhost:3000';
+    // Cashfree REQUIRES publicly accessible HTTPS URLs for return_url (even in sandbox)
+    // Priority: NEXT_PUBLIC_WEBSITE_URL > NGROK_URL > origin header (if HTTPS) > default production URL
+    let origin: string | null = null;
     
-    // Convert HTTP to HTTPS for production Cashfree environment
-    // For localhost, we'll use a workaround or skip return_url if in production mode
-    if (CASHFREE_ENV === 'PRODUCTION') {
-      // Production Cashfree requires HTTPS
-      if (origin && (origin.startsWith('http://localhost') || origin.startsWith('localhost'))) {
-        // For local development with production Cashfree, we can:
-        // Option 1: Use ngrok or similar service
-        // Option 2: Skip return_url (user will need to manually check payment status)
-        // Option 3: Use a placeholder HTTPS URL
-        console.warn('Production Cashfree requires HTTPS. Localhost detected. Consider using ngrok or SANDBOX environment for testing.');
-        // Check for ngrok URL in environment
-        const ngrokUrl = process.env.NGROK_URL;
-        if (ngrokUrl) {
-          origin = ngrokUrl;
-        } else {
-          // Skip return_url for localhost + production (will rely on webhook)
-          origin = null;
-        }
-      } else if (origin && origin.startsWith('http://')) {
-        // Convert HTTP to HTTPS
-        origin = origin.replace('http://', 'https://');
-      } else if (origin && !origin.startsWith('https://')) {
-        // Add https:// if missing
-        origin = `https://${origin}`;
-      }
+    // First, check for explicit website URL in environment
+    const websiteUrl = process.env.NEXT_PUBLIC_WEBSITE_URL || process.env.WEBSITE_URL;
+    if (websiteUrl) {
+      origin = websiteUrl.replace(/\/$/, ''); // Remove trailing slash
+      console.log('Using website URL from environment:', origin);
     } else {
-      // For SANDBOX, we can be more lenient, but still prefer HTTPS
-      if (origin && (origin.startsWith('http://localhost') || origin.startsWith('localhost'))) {
-        // Sandbox might accept HTTP localhost, but let's try to use HTTPS if possible
-        // For local development, you might want to use ngrok
-        const ngrokUrl = process.env.NGROK_URL;
-        if (ngrokUrl) {
-          origin = ngrokUrl;
+      // Check for ngrok URL (for local development)
+      const ngrokUrl = process.env.NGROK_URL;
+      if (ngrokUrl) {
+        origin = ngrokUrl.replace(/\/$/, '');
+        console.log('Using ngrok URL:', origin);
+      } else {
+        // Get from request headers
+        const requestOrigin = request.headers.get('origin');
+        const requestHost = request.headers.get('host');
+        const requestReferer = request.headers.get('referer');
+        
+        // Try to extract origin from referer if available
+        if (requestOrigin && requestOrigin.startsWith('https://')) {
+          origin = requestOrigin;
+          console.log('Using origin from request header:', origin);
+        } else if (requestReferer) {
+          try {
+            const refererUrl = new URL(requestReferer);
+            origin = refererUrl.origin;
+            console.log('Using origin from referer:', origin);
+          } catch (e) {
+            // Invalid URL, continue
+          }
+        } else if (requestHost && !requestHost.includes('localhost')) {
+          origin = `https://${requestHost}`;
+          console.log('Using host from request header:', origin);
         }
-        // Otherwise keep as is for sandbox (might work with HTTP)
-      } else if (origin && origin.startsWith('http://') && !origin.includes('localhost')) {
-        // Convert HTTP to HTTPS for non-localhost
-        origin = origin.replace('http://', 'https://');
-      } else if (origin && !origin.startsWith('http')) {
-        // Add https:// if missing
-        origin = `https://${origin}`;
+        
+        // If still no valid origin, use default production URL
+        if (!origin || origin.includes('localhost')) {
+          // Use the actual website URL - default to shaktisewafoudation.in
+          origin = 'https://www.shaktisewafoudation.in';
+          console.log('Using default production URL:', origin);
+        }
       }
+    }
+    
+    // Ensure origin is HTTPS (Cashfree requires HTTPS)
+    if (origin && origin.startsWith('http://') && !origin.includes('localhost')) {
+      origin = origin.replace('http://', 'https://');
+      console.log('Converted to HTTPS:', origin);
+    } else if (origin && !origin.startsWith('https://') && !origin.includes('localhost')) {
+      origin = `https://${origin}`;
+      console.log('Added HTTPS protocol:', origin);
     }
     
     // Prepare order data for Cashfree according to latest API (v2025-01-01)
@@ -109,43 +124,35 @@ export async function POST(request: NextRequest) {
     };
 
     // Add order_meta - Cashfree REQUIRES return_url for valid payment sessions
-    // Without a valid return_url, the session will be invalid
+    // Without a valid, publicly accessible HTTPS return_url, the session will be invalid
     // Note: Cashfree doesn't support placeholders like {order_id} - use actual order ID
     let returnUrl: string | null = null;
     let notifyUrl: string | null = null;
 
-    if (origin && origin.startsWith('https://')) {
-      // Valid HTTPS URL - use actual order ID, not placeholder
-      returnUrl = `${origin}/api/payments/verify?order_id=${orderId}`;
-      notifyUrl = `${origin}/api/payments/webhook`;
-    } else if (origin && CASHFREE_ENV === 'SANDBOX') {
-      // For sandbox, HTTP localhost might work
-      const protocol = origin.startsWith('http') ? '' : 'http://';
-      returnUrl = `${protocol}${origin}/api/payments/verify?order_id=${orderId}`;
-      notifyUrl = `${protocol}${origin}/api/payments/webhook`;
-    } else {
-      // For localhost + production, check for ngrok
-      const ngrokUrl = process.env.NGROK_URL;
-      if (ngrokUrl) {
-        returnUrl = `${ngrokUrl}/api/payments/verify?order_id=${orderId}`;
-        notifyUrl = `${ngrokUrl}/api/payments/webhook`;
-      } else {
-        // For production without ngrok, we MUST fail - sessions won't work without return_url
-        console.error('Production Cashfree requires HTTPS return_url. Session will be invalid without it.');
-        return NextResponse.json(
-          {
-            success: false,
-            message: 'HTTPS return_url required for production Cashfree. Sessions are invalid without a valid return_url.',
-            details: {
-              error: 'client session is invalid',
-              solution: 'Set NGROK_URL=https://your-ngrok-url.ngrok.io in .env.local, or change CASHFREE_ENV=SANDBOX for local testing',
-              note: 'Cashfree requires a valid HTTPS return_url to create valid payment sessions. Without it, you will get "client session is invalid" error.',
-            },
+    if (!origin || origin.includes('localhost')) {
+      // If we still have localhost, fail with helpful error message
+      console.error('❌ Cannot use localhost as return_url. Cashfree requires publicly accessible HTTPS URL.');
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Public HTTPS URL required for Cashfree return_url. Localhost is not accessible.',
+          details: {
+            error: 'client session is invalid',
+            solution: 'Set NEXT_PUBLIC_WEBSITE_URL=https://www.shaktisewafoudation.in in .env, or use NGROK_URL for local testing',
+            note: 'Cashfree requires a publicly accessible HTTPS return_url. Set NEXT_PUBLIC_WEBSITE_URL to your production website URL.',
           },
-          { status: 400 }
-        );
-      }
+        },
+        { status: 400 }
+      );
     }
+
+    // Both return_url and notify_url must be HTTPS and publicly accessible
+    returnUrl = `${origin}/api/payments/verify?order_id=${orderId}`;
+    notifyUrl = `${origin}/api/payments/webhook`;
+    
+    console.log('✅ Using publicly accessible HTTPS URLs:');
+    console.log('   Return URL:', returnUrl);
+    console.log('   Notify URL:', notifyUrl);
 
     // Always set order_meta with return_url - this is REQUIRED for valid sessions
     if (returnUrl) {
@@ -385,48 +392,58 @@ export async function POST(request: NextRequest) {
     // Priority 1: Use payment_link from Cashfree response if provided (most reliable)
     // Priority 2: Construct using payment_session_id
     // Cashfree payment link format for user-facing checkout page
-    // Production: https://payments.cashfree.com/order/#{payment_session_id}
-    // Sandbox: https://sandbox.cashfree.com/pg/checkout/payment-link/{payment_session_id}
+    // Both Production and Sandbox use the same payments domain: https://payments.cashfree.com/order/#{payment_session_id}
+    // The environment is determined by the credentials used, not the domain
     let finalPaymentLink = payment_link;
+    
+    // Clean the payment_session_id if it has any issues (like "paymentpayment" suffix)
+    let cleanPaymentSessionId = payment_session_id;
+    if (cleanPaymentSessionId && cleanPaymentSessionId.endsWith('paymentpayment')) {
+      cleanPaymentSessionId = cleanPaymentSessionId.replace(/paymentpayment$/, '');
+      console.log('⚠️ Removed "paymentpayment" suffix from payment_session_id');
+      console.log('   Original:', payment_session_id);
+      console.log('   Cleaned:', cleanPaymentSessionId);
+    }
     
     if (finalPaymentLink) {
       console.log('✅ Using payment_link from Cashfree response');
       console.log('   Original payment_link:', finalPaymentLink);
       
-      // Verify the payment_link format is correct for production
-      if (CASHFREE_ENV === 'PRODUCTION') {
-        // Ensure it uses the correct format with #payment_session_id
-        if (finalPaymentLink.includes('order_token=')) {
-          // Extract session ID from order_token parameter if present
-          const urlMatch = finalPaymentLink.match(/order_token=([^&]+)/);
-          if (urlMatch && urlMatch[1]) {
-            const extractedSessionId = decodeURIComponent(urlMatch[1]);
-            finalPaymentLink = `https://payments.cashfree.com/order/#${extractedSessionId}`;
-            console.log('   ✅ Converted to correct format: #payment_session_id');
-          }
-        } else if (!finalPaymentLink.includes('#')) {
-          // If no hash, add it with payment_session_id
-          finalPaymentLink = `https://payments.cashfree.com/order/#${payment_session_id}`;
-          console.log('   ✅ Added #payment_session_id to URL');
+      // Verify and fix the payment_link format for both environments
+      if (finalPaymentLink.includes('order_token=')) {
+        // Extract session ID from order_token parameter if present
+        const urlMatch = finalPaymentLink.match(/order_token=([^&]+)/);
+        if (urlMatch && urlMatch[1]) {
+          const extractedSessionId = decodeURIComponent(urlMatch[1]);
+          // Both environments use the same payments domain
+          finalPaymentLink = `https://payments.cashfree.com/order/#${extractedSessionId}`;
+          console.log('   ✅ Converted to correct format: #payment_session_id');
         }
+      } else if (!finalPaymentLink.includes('#')) {
+        // If no hash, add it with payment_session_id
+        finalPaymentLink = `https://payments.cashfree.com/order/#${cleanPaymentSessionId}`;
+        console.log('   ✅ Added #payment_session_id to URL');
+      } else if (finalPaymentLink.includes('payments.sandbox.cashfree.com')) {
+        // Convert any sandbox-specific domain to the standard payments domain
+        finalPaymentLink = finalPaymentLink.replace('payments.sandbox.cashfree.com', 'payments.cashfree.com');
+        console.log('   ✅ Converted to standard payments domain');
       }
-    } else if (payment_session_id) {
+    } else if (cleanPaymentSessionId) {
       // Construct payment link from payment_session_id
-      if (CASHFREE_ENV === 'PRODUCTION') {
-        // Production payment checkout page URL - use payment_session_id directly after #
-        // Format: https://payments.cashfree.com/order/#{payment_session_id}
-        finalPaymentLink = `https://payments.cashfree.com/order/#${payment_session_id}`;
-      } else {
-        // Sandbox payment checkout page URL
-        finalPaymentLink = `https://sandbox.cashfree.com/pg/checkout/payment-link/${payment_session_id}`;
-      }
+      // Both Production and Sandbox use the same payments domain
+      finalPaymentLink = `https://payments.cashfree.com/order/#${cleanPaymentSessionId}`;
       console.log('✅ Constructed payment link from payment_session_id');
     }
 
     console.log('\n🔗 Final Payment Link:');
     console.log('   URL:', finalPaymentLink);
-    console.log('   Contains payment_session_id:', finalPaymentLink?.includes(payment_session_id) ? 'Yes' : 'No');
-    console.log('   Format correct:', finalPaymentLink?.startsWith('https://payments.cashfree.com/order/#') || finalPaymentLink?.startsWith('https://sandbox.cashfree.com/') ? 'Yes' : 'No');
+    const sessionIdToCheck = cleanPaymentSessionId || payment_session_id;
+    console.log('   Contains payment_session_id:', finalPaymentLink?.includes(sessionIdToCheck) ? 'Yes' : 'No');
+    // Both environments use the same payments domain
+    const isCorrectFormat = finalPaymentLink?.startsWith('https://payments.cashfree.com/order/#');
+    console.log('   Format correct:', isCorrectFormat ? 'Yes' : 'No');
+    console.log('   Environment:', CASHFREE_ENV);
+    console.log('   Note: Both sandbox and production use the same payments.cashfree.com domain');
 
     // Helper function to validate MongoDB ObjectId format
     const isValidObjectId = (id: string): boolean => {
