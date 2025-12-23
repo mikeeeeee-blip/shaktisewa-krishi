@@ -9,7 +9,6 @@ import BestSellers from "@/components/BestSellers";
 import TodaysOffers from "@/components/TodaysOffers";
 import NewArrivals from "@/components/NewArrivals";
 import GrowthRegulators from "@/components/GrowthRegulators";
-
 import SeedsSection from "@/components/SeedsSection";
 import EquipmentsSection from "@/components/EquipmentsSection";
 import FertilizersSection from "@/components/FertilizersSection";

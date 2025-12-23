@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
     // Reference: https://www.cashfree.com/docs/api-reference/payments/previous/v2023-08-01/overview
     const orderData: any = {
       order_id: orderId,
-      order_amount: Number(orderAmount).toFixed(2), // Amount as string with 2 decimals
+      order_amount: Number(orderAmount), // Amount as number (Cashfree accepts both string and number)
       order_currency: 'INR',
       customer_details: {
         customer_id: customerDetails.customerId || `customer_${Date.now()}`,
@@ -110,23 +110,24 @@ export async function POST(request: NextRequest) {
 
     // Add order_meta - Cashfree REQUIRES return_url for valid payment sessions
     // Without a valid return_url, the session will be invalid
+    // Note: Cashfree doesn't support placeholders like {order_id} - use actual order ID
     let returnUrl: string | null = null;
     let notifyUrl: string | null = null;
 
     if (origin && origin.startsWith('https://')) {
-      // Valid HTTPS URL
-      returnUrl = `${origin}/api/payments/verify?order_id={order_id}`;
+      // Valid HTTPS URL - use actual order ID, not placeholder
+      returnUrl = `${origin}/api/payments/verify?order_id=${orderId}`;
       notifyUrl = `${origin}/api/payments/webhook`;
     } else if (origin && CASHFREE_ENV === 'SANDBOX') {
       // For sandbox, HTTP localhost might work
       const protocol = origin.startsWith('http') ? '' : 'http://';
-      returnUrl = `${protocol}${origin}/api/payments/verify?order_id={order_id}`;
+      returnUrl = `${protocol}${origin}/api/payments/verify?order_id=${orderId}`;
       notifyUrl = `${protocol}${origin}/api/payments/webhook`;
     } else {
       // For localhost + production, check for ngrok
       const ngrokUrl = process.env.NGROK_URL;
       if (ngrokUrl) {
-        returnUrl = `${ngrokUrl}/api/payments/verify?order_id={order_id}`;
+        returnUrl = `${ngrokUrl}/api/payments/verify?order_id=${orderId}`;
         notifyUrl = `${ngrokUrl}/api/payments/webhook`;
       } else {
         // For production without ngrok, we MUST fail - sessions won't work without return_url
@@ -151,6 +152,9 @@ export async function POST(request: NextRequest) {
       orderData.order_meta = {
         return_url: returnUrl,
         notify_url: notifyUrl || returnUrl.replace('/verify', '/webhook'),
+        // Cashfree payment method codes: cc,dc,ppc,ccc,emi,paypal,upi,nb,app,paylater,applepay
+        // nb = netbanking, app = wallet
+        payment_methods: 'cc,dc,upi,nb,app,paylater,emi',
       };
       console.log('Setting order_meta with return_url:', {
         return_url: returnUrl,
@@ -346,13 +350,13 @@ export async function POST(request: NextRequest) {
 
     // Construct payment link if not provided in response
     // Cashfree payment link format for user-facing checkout page
-    // Production: https://payments.cashfree.com/order/#{payment_session_id}
+    // Production: https://payments.cashfree.com/order/#/checkout?order_token={payment_session_id}
     // Sandbox: https://sandbox.cashfree.com/pg/checkout/payment-link/{payment_session_id}
     let finalPaymentLink = payment_link;
     if (!finalPaymentLink && payment_session_id) {
       if (CASHFREE_ENV === 'PRODUCTION') {
-        // Production payment checkout page URL
-        finalPaymentLink = `https://payments.cashfree.com/order/#${payment_session_id}`;
+        // Production payment checkout page URL - use /checkout?order_token format
+        finalPaymentLink = `https://payments.cashfree.com/order/#/checkout?order_token=${encodeURIComponent(payment_session_id)}`;
       } else {
         // Sandbox payment checkout page URL
         finalPaymentLink = `https://sandbox.cashfree.com/pg/checkout/payment-link/${payment_session_id}`;
@@ -363,6 +367,14 @@ export async function POST(request: NextRequest) {
         payment_link: finalPaymentLink,
         env: CASHFREE_ENV,
       });
+    } else if (finalPaymentLink && CASHFREE_ENV === 'PRODUCTION') {
+      // If Cashfree provided a payment_link, verify it's in the correct format
+      // If it's missing /checkout?order_token, fix it
+      if (!finalPaymentLink.includes('/checkout?order_token=') && payment_session_id) {
+        // Extract session ID from the provided link or use the one from response
+        finalPaymentLink = `https://payments.cashfree.com/order/#/checkout?order_token=${encodeURIComponent(payment_session_id)}`;
+        console.log('Fixed payment link format to use /checkout?order_token=', finalPaymentLink);
+      }
     }
 
     // Optionally, create order in backend first (for tracking)
@@ -390,7 +402,13 @@ export async function POST(request: NextRequest) {
           }
         ).catch(err => {
           // Log error but don't fail the payment session creation
-          console.error('Error creating order in backend:', err.message);
+          console.error('Error creating order in backend:', {
+            message: err.message,
+            status: err.response?.status,
+            statusText: err.response?.statusText,
+            data: err.response?.data,
+            url: err.config?.url,
+          });
         });
       }
     } catch (error) {
