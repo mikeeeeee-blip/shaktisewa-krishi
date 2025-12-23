@@ -377,39 +377,58 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Helper function to validate MongoDB ObjectId format
+    const isValidObjectId = (id: string): boolean => {
+      return /^[0-9a-fA-F]{24}$/.test(id);
+    };
+
     // Optionally, create order in backend first (for tracking)
     // This can be done before or after payment - depending on your business logic
+    // Only attempt if items have valid MongoDB ObjectIds
     try {
       const token = request.headers.get('authorization')?.replace('Bearer ', '');
-      if (token) {
-        // Try to create order in backend with pending payment status
-        await axios.post(
-          `${API_BASE_URL}/orders`,
-          {
-            items,
-            shippingAddress,
-            billingAddress: billingAddress || shippingAddress,
-            paymentMethod: 'ONLINE',
-            paymentStatus: 'PENDING',
-            paymentGateway: 'CASHFREE',
-            paymentSessionId: payment_session_id,
-            customerNotes: `Payment via Cashfree - Order ID: ${orderId}`,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
+      if (token && items && Array.isArray(items) && items.length > 0) {
+        // Filter items to only include those with valid ObjectId productIds
+        const validItems = items.filter(item => 
+          item.productId && isValidObjectId(item.productId)
+        );
+
+        // Only create backend order if we have valid items
+        if (validItems.length > 0) {
+          // Try to create order in backend with pending payment status
+          await axios.post(
+            `${API_BASE_URL}/orders`,
+            {
+              items: validItems,
+              shippingAddress,
+              billingAddress: billingAddress || shippingAddress,
+              paymentMethod: 'ONLINE',
+              paymentStatus: 'PENDING',
+              paymentGateway: 'CASHFREE',
+              paymentSessionId: payment_session_id,
+              customerNotes: `Payment via Cashfree - Order ID: ${orderId}`,
             },
-          }
-        ).catch(err => {
-          // Log error but don't fail the payment session creation
-          console.error('Error creating order in backend:', {
-            message: err.message,
-            status: err.response?.status,
-            statusText: err.response?.statusText,
-            data: err.response?.data,
-            url: err.config?.url,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          ).catch(err => {
+            // Log error but don't fail the payment session creation
+            console.error('Error creating order in backend:', {
+              message: err.message,
+              status: err.response?.status,
+              statusText: err.response?.statusText,
+              data: err.response?.data,
+              url: err.config?.url,
+            });
           });
-        });
+        } else {
+          console.warn('Skipping backend order creation: No items with valid ObjectId format', {
+            totalItems: items.length,
+            items: items.map(item => ({ productId: item.productId })),
+          });
+        }
       }
     } catch (error) {
       // Continue even if backend order creation fails
