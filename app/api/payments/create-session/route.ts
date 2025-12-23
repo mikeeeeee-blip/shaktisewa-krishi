@@ -7,7 +7,7 @@ const CASHFREE_ENV = process.env.CASHFREE_ENV || 'SANDBOX'; // SANDBOX or PRODUC
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-krishi.vercel.app/api/v1';
 
 // Cashfree API base URLs - Updated according to official docs
-// Reference: https://www.cashfree.com/docs/api-reference/payments/previous/v2023-08-01/overview
+// Reference: https://www.cashfree.com/docs/api-reference/payments/latest/orders/create
 // Test: https://sandbox.cashfree.com/pg
 // Production: https://api.cashfree.com/pg
 const getCashfreeApiUrl = () => {
@@ -94,8 +94,8 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Prepare order data for Cashfree according to v2023-08-01 API
-    // Reference: https://www.cashfree.com/docs/api-reference/payments/previous/v2023-08-01/overview
+    // Prepare order data for Cashfree according to latest API (v2025-01-01)
+    // Reference: https://www.cashfree.com/docs/api-reference/payments/latest/orders/create
     const orderData: any = {
       order_id: orderId,
       order_amount: Number(orderAmount), // Amount as number (Cashfree accepts both string and number)
@@ -173,14 +173,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Creating Cashfree payment session (v2023-08-01):', {
+    console.log('Creating Cashfree payment session (v2025-01-01):', {
       url: `${CASHFREE_API_URL}/orders`,
       orderId,
       orderAmount,
       hasAppId: !!CASHFREE_APP_ID,
       hasSecretKey: !!CASHFREE_SECRET_KEY,
       env: CASHFREE_ENV,
-      apiVersion: '2023-08-01',
+      apiVersion: '2025-01-01',
     });
 
     // Create payment session with Cashfree
@@ -205,7 +205,7 @@ export async function POST(request: NextRequest) {
             headers: {
               'x-client-id': CASHFREE_APP_ID!,
               'x-client-secret': CASHFREE_SECRET_KEY!,
-              'x-api-version': '2023-08-01', // Using v2023-08-01 as per official docs
+              'x-api-version': '2025-01-01', // Using latest API version as per official docs
               'Content-Type': 'application/json',
             },
             timeout: 30000, // 30 second timeout
@@ -350,13 +350,15 @@ export async function POST(request: NextRequest) {
 
     // Construct payment link if not provided in response
     // Cashfree payment link format for user-facing checkout page
-    // Production: https://payments.cashfree.com/order/#/checkout?order_token={payment_session_id}
+    // According to Cashfree docs: Use payment_session_id directly in the checkout URL
+    // Production: https://payments.cashfree.com/order/#{payment_session_id}
     // Sandbox: https://sandbox.cashfree.com/pg/checkout/payment-link/{payment_session_id}
     let finalPaymentLink = payment_link;
     if (!finalPaymentLink && payment_session_id) {
       if (CASHFREE_ENV === 'PRODUCTION') {
-        // Production payment checkout page URL - use /checkout?order_token format
-        finalPaymentLink = `https://payments.cashfree.com/order/#/checkout?order_token=${encodeURIComponent(payment_session_id)}`;
+        // Production payment checkout page URL - use payment_session_id directly after #
+        // Format: https://payments.cashfree.com/order/#{payment_session_id}
+        finalPaymentLink = `https://payments.cashfree.com/order/#${payment_session_id}`;
       } else {
         // Sandbox payment checkout page URL
         finalPaymentLink = `https://sandbox.cashfree.com/pg/checkout/payment-link/${payment_session_id}`;
@@ -368,12 +370,20 @@ export async function POST(request: NextRequest) {
         env: CASHFREE_ENV,
       });
     } else if (finalPaymentLink && CASHFREE_ENV === 'PRODUCTION') {
-      // If Cashfree provided a payment_link, verify it's in the correct format
-      // If it's missing /checkout?order_token, fix it
-      if (!finalPaymentLink.includes('/checkout?order_token=') && payment_session_id) {
-        // Extract session ID from the provided link or use the one from response
-        finalPaymentLink = `https://payments.cashfree.com/order/#/checkout?order_token=${encodeURIComponent(payment_session_id)}`;
-        console.log('Fixed payment link format to use /checkout?order_token=', finalPaymentLink);
+      // If Cashfree provided a payment_link, use it as-is
+      // But ensure it follows the correct format: #payment_session_id (no order_token param)
+      if (finalPaymentLink.includes('order_token=')) {
+        // Extract session ID from order_token parameter if present
+        const urlMatch = finalPaymentLink.match(/order_token=([^&]+)/);
+        if (urlMatch && urlMatch[1]) {
+          const extractedSessionId = decodeURIComponent(urlMatch[1]);
+          finalPaymentLink = `https://payments.cashfree.com/order/#${extractedSessionId}`;
+          console.log('Converted payment link to use #payment_session_id format:', finalPaymentLink);
+        }
+      } else if (!finalPaymentLink.includes(`#${payment_session_id}`) && payment_session_id) {
+        // Ensure it uses the payment_session_id in hash format
+        finalPaymentLink = `https://payments.cashfree.com/order/#${payment_session_id}`;
+        console.log('Updated payment link to use #payment_session_id format:', finalPaymentLink);
       }
     }
 
