@@ -389,8 +389,8 @@ export async function POST(request: NextRequest) {
     console.log('   Payment Session ID length:', payment_session_id?.length || 0);
     console.log('   Payment Link (from response):', payment_link || 'Not provided');
 
-    // Clean and validate payment_session_id
-    // Remove any whitespace, newlines, and fix common issues
+    // Use payment_session_id as-is from Cashfree response (it should be valid)
+    // Only perform minimal cleaning if there are obvious issues
     let cleanPaymentSessionId = payment_session_id?.trim();
     
     if (!cleanPaymentSessionId || typeof cleanPaymentSessionId !== 'string') {
@@ -405,28 +405,53 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Remove common malformed suffixes/prefixes
+    // Store original for comparison
+    const originalSessionId = cleanPaymentSessionId;
+    
+    // Only clean if there's an obvious issue (like "paymentpayment" suffix)
+    // This was seen in some responses where the ID was duplicated
     if (cleanPaymentSessionId.endsWith('paymentpayment')) {
       cleanPaymentSessionId = cleanPaymentSessionId.replace(/paymentpayment$/g, '');
-      console.log('⚠️ Removed "paymentpayment" suffix');
+      console.log('⚠️ Removed "paymentpayment" suffix from payment_session_id');
+      console.log('   Original:', originalSessionId.substring(0, 100) + '...');
+      console.log('   Cleaned:', cleanPaymentSessionId.substring(0, 100) + '...');
     }
     
-    // Remove any accidental URL encoding artifacts or extra characters
-    cleanPaymentSessionId = cleanPaymentSessionId.replace(/\s+/g, '').replace(/[\r\n]+/g, '');
+    // Remove only whitespace/newlines (but keep the session ID structure intact)
+    // Don't remove any valid characters that might be part of the session ID
+    cleanPaymentSessionId = cleanPaymentSessionId.replace(/[\s\r\n]+/g, '');
     
-    // Validate session ID format (should start with "session_" and contain valid characters)
+    // Validate session ID format (MUST start with "session_")
     if (!cleanPaymentSessionId.startsWith('session_')) {
-      console.warn('⚠️ Payment session ID does not start with "session_" prefix');
-      console.warn('   Received:', cleanPaymentSessionId);
+      console.error('❌ Payment session ID does not start with "session_" prefix');
+      console.error('   Received:', cleanPaymentSessionId);
+      return NextResponse.json(
+        { 
+          success: false, 
+          message: 'Invalid payment_session_id format from Cashfree',
+          details: 'payment_session_id must start with "session_"'
+        },
+        { status: 500 }
+      );
     }
 
     // Validate length (Cashfree session IDs are typically 100-200 characters)
-    if (cleanPaymentSessionId.length < 50 || cleanPaymentSessionId.length > 500) {
-      console.warn('⚠️ Payment session ID length seems unusual:', cleanPaymentSessionId.length);
+    if (cleanPaymentSessionId.length < 50) {
+      console.warn('⚠️ Payment session ID seems too short:', cleanPaymentSessionId.length);
+    }
+    if (cleanPaymentSessionId.length > 500) {
+      console.warn('⚠️ Payment session ID seems too long:', cleanPaymentSessionId.length);
+      // If it's way too long, it might have duplicates - use only the first part
+      const sessionMatch = cleanPaymentSessionId.match(/^(session_[^_]+(?:_[^_]+)*)/);
+      if (sessionMatch) {
+        cleanPaymentSessionId = sessionMatch[1];
+        console.log('⚠️ Truncated payment_session_id to first valid session ID');
+      }
     }
 
-    console.log('   Payment Session ID (cleaned):', cleanPaymentSessionId);
-    console.log('   Payment Session ID (cleaned length):', cleanPaymentSessionId.length);
+    console.log('   Payment Session ID (final):', cleanPaymentSessionId.substring(0, 100) + '...');
+    console.log('   Payment Session ID length:', cleanPaymentSessionId.length);
+    console.log('   Payment Session ID starts with "session_":', cleanPaymentSessionId.startsWith('session_') ? 'Yes ✅' : 'No ❌');
 
     // Construct payment link
     // Priority 1: Use payment_link from Cashfree response if provided (most reliable)
@@ -617,20 +642,90 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Final validation before returning
+    if (!cleanPaymentSessionId || !cleanPaymentSessionId.startsWith('session_')) {
+      console.error('❌ Invalid payment_session_id format');
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Invalid payment session ID format',
+          details: 'Payment session ID must start with "session_"'
+        },
+        { status: 500 }
+      );
+    }
+
+    // Verify the order exists and session is valid by fetching order details
+    // This ensures the session ID is valid before returning it to the frontend
+    try {
+      console.log('\n🔍 Verifying order session validity...');
+      const verifyResponse = await axios.get(
+        `${CASHFREE_API_URL}/orders/${cfOrderId || orderId}`,
+        {
+          headers: {
+            'x-client-id': CASHFREE_APP_ID!,
+            'x-client-secret': CASHFREE_SECRET_KEY!,
+            'x-api-version': '2025-01-01',
+            'Accept': 'application/json',
+          },
+          timeout: 10000,
+        }
+      );
+      
+      if (verifyResponse.data?.payment_session_id) {
+        const verifiedSessionId = verifyResponse.data.payment_session_id.trim();
+        console.log('   ✅ Order verified successfully');
+        console.log('   Verified Session ID matches:', verifiedSessionId === cleanPaymentSessionId ? 'Yes ✅' : 'No ❌');
+        
+        // Use the verified session ID from the order verification response (most reliable)
+        if (verifiedSessionId !== cleanPaymentSessionId) {
+          console.log('   ⚠️ Session ID mismatch, using verified session ID from order fetch');
+          cleanPaymentSessionId = verifiedSessionId;
+        }
+      }
+    } catch (verifyError: any) {
+      console.warn('   ⚠️ Could not verify order (non-critical):', verifyError.response?.status || verifyError.message);
+      // Continue anyway - the order was just created, so it should be valid
+    }
+
+    console.log('\n✅ Final payment_session_id to return:');
+    console.log('   Preview:', cleanPaymentSessionId.substring(0, 100) + '...');
+    console.log('   Full Length:', cleanPaymentSessionId.length);
+    console.log('   Starts with "session_":', cleanPaymentSessionId.startsWith('session_') ? 'Yes ✅' : 'No ❌');
+    console.log('   Contains only valid characters:', /^[a-zA-Z0-9_-]+$/.test(cleanPaymentSessionId) ? 'Yes ✅' : 'No ❌');
+    
+    // IMPORTANT: Ensure session ID is returned exactly as Cashfree provides it
+    // Only minimal cleaning should be applied (trim whitespace, remove obvious duplicates)
+    // The session ID format from Cashfree should be preserved exactly
+
     return NextResponse.json({
       success: true,
       data: {
-        paymentSessionId: cleanPaymentSessionId, // Use cleaned version
-        paymentLink: finalPaymentLink,
+        paymentSessionId: cleanPaymentSessionId, // Use verified/cleaned version - required for SDK
+        paymentLink: finalPaymentLink, // Fallback option
         orderId: cfOrderId || orderId,
         cfOrderId: cf_order_id,
         orderStatus: order_status,
+        // Include environment info for frontend SDK initialization
+        environment: CASHFREE_ENV.toLowerCase(), // 'sandbox' or 'production'
       },
       // Add troubleshooting info if order status is not ACTIVE
       ...(order_status && order_status !== 'ACTIVE' ? {
-        warning: `Order status is '${order_status}' instead of 'ACTIVE'. This may cause payment issues.`,
-        troubleshooting: 'Please verify your Cashfree account configuration and ensure transactions are enabled.'
-      } : {})
+        warning: `Order status is '${order_status}' instead of 'ACTIVE'. This may cause payment issues.`
+      } : {}),
+      // Add general troubleshooting checklist for "client session is invalid" errors
+      troubleshooting: {
+        note: order_status !== 'ACTIVE' 
+          ? 'Order status is not ACTIVE. Please verify Cashfree account configuration.'
+          : 'If you see "client session is invalid" error, verify the following:',
+        checklist: [
+          'Domain whitelisting: Your website domain must be whitelisted in Cashfree Merchant Dashboard (Settings > Domain Whitelisting)',
+          'Environment match: Ensure sandbox credentials (TEST_*) are used with sandbox mode',
+          'Session ID format: The session ID should start with "session_" and be passed exactly as received',
+          'Return URL: Ensure return_url is publicly accessible via HTTPS',
+          'Order status: Verify the order was created successfully with ACTIVE status'
+        ]
+      }
     });
   } catch (error: any) {
     console.error('Error creating payment session:', error);

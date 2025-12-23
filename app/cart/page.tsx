@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ShoppingCart, Plus, Minus, Trash2, ChevronRight, ArrowLeft, CreditCard, Banknote, Smartphone, X, CheckCircle, Truck, MapPin, User, Phone, Mail } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, ChevronRight, ArrowLeft, CreditCard, Banknote, X, CheckCircle, Truck, MapPin, User, Phone, Mail } from 'lucide-react';
 import TopBar from '@/components/TopBar';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
@@ -15,7 +15,7 @@ import { createOrder } from '@/lib/api/orders';
 import { createPaymentSession } from '@/lib/api/payments';
 import { updatePaymentStatus } from '@/lib/api/orders';
 
-type PaymentMethod = 'cod' | 'online' | 'upi' | 'cashfree';
+type PaymentMethod = 'cod' | 'cashfree';
 
 interface ShippingAddress {
   fullName: string;
@@ -206,12 +206,7 @@ export default function CartPage() {
       };
 
       // Map payment method
-      let paymentMethodValue = 'COD';
-      if (paymentMethod === 'upi') {
-        paymentMethodValue = 'UPI';
-      } else if (paymentMethod === 'online') {
-        paymentMethodValue = 'CREDIT_CARD'; // or 'DEBIT_CARD', 'NET_BANKING'
-      }
+      const paymentMethodValue = paymentMethod === 'cod' ? 'COD' : 'ONLINE';
 
       // Create order via API
       const response = await createOrder({
@@ -219,7 +214,7 @@ export default function CartPage() {
         shippingAddress: shippingAddr,
         billingAddress: shippingAddr,
         paymentMethod: paymentMethodValue,
-        customerNotes: `Payment via ${paymentMethod === 'cod' ? 'Cash on Delivery' : paymentMethod === 'upi' ? 'UPI' : 'Online Payment'}`,
+        customerNotes: `Payment via ${paymentMethod === 'cod' ? 'Cash on Delivery' : 'Cashfree'}`,
       });
 
       if (response.success) {
@@ -296,9 +291,121 @@ export default function CartPage() {
         items: orderItems,
       });
 
-      if (paymentResponse.success && paymentResponse.data?.paymentLink) {
-        // Redirect to Cashfree payment page
-        window.location.href = paymentResponse.data.paymentLink;
+      if (paymentResponse.success && paymentResponse.data?.paymentSessionId) {
+        // Use Cashfree JS SDK to open checkout (recommended approach)
+        // Reference: https://www.cashfree.com/docs/payments/online/web/redirect
+        
+        const paymentSessionId = paymentResponse.data.paymentSessionId;
+        
+        // Use environment from response, or default to sandbox
+        // The backend returns 'sandbox' or 'production' in lowercase
+        const cashfreeMode = paymentResponse.data.environment || 'sandbox';
+        
+        // Ensure we're using the exact session ID as received (no additional processing)
+        const exactPaymentSessionId = paymentSessionId.trim();
+        
+        // Validate paymentSessionId format
+        if (!exactPaymentSessionId || typeof exactPaymentSessionId !== 'string') {
+          console.error('Invalid paymentSessionId type:', typeof exactPaymentSessionId, exactPaymentSessionId);
+          setError('Invalid payment session ID. Please try again.');
+          setIsProcessing(false);
+          return;
+        }
+        
+        if (!exactPaymentSessionId.startsWith('session_')) {
+          console.error('Invalid paymentSessionId format - must start with "session_":', exactPaymentSessionId.substring(0, 100));
+          setError('Invalid payment session ID format. Please try again.');
+          setIsProcessing(false);
+          return;
+        }
+        
+        console.log('Cashfree checkout configuration:', {
+          mode: cashfreeMode,
+          paymentSessionIdLength: exactPaymentSessionId.length,
+          paymentSessionIdPreview: exactPaymentSessionId.substring(0, 50) + '...',
+          hasSDK: typeof window !== 'undefined' && !!(window as any).Cashfree
+        });
+        
+        // Function to initialize and open Cashfree checkout
+        const openCashfreeCheckout = () => {
+          if (typeof window !== 'undefined' && (window as any).Cashfree) {
+            try {
+              // Re-validate session ID right before using it
+              const sessionIdToUse = exactPaymentSessionId.trim();
+              
+              if (!sessionIdToUse || !sessionIdToUse.startsWith('session_')) {
+                console.error('Invalid session ID before checkout:', sessionIdToUse);
+                setError('Invalid payment session ID. Please try again.');
+                setIsProcessing(false);
+                return;
+              }
+              
+              console.log('Initializing Cashfree SDK with mode:', cashfreeMode);
+              const cashfree = (window as any).Cashfree({
+                mode: cashfreeMode
+              });
+              
+              console.log('Opening Cashfree checkout with paymentSessionId:', sessionIdToUse.substring(0, 50) + '...');
+              console.log('Full session ID length:', sessionIdToUse.length);
+              
+              // Open Cashfree checkout using SDK
+              // IMPORTANT: Pass the exact paymentSessionId as received from backend
+              const checkoutOptions = {
+                paymentSessionId: sessionIdToUse, // Use exact session ID without modification
+                redirectTarget: '_self' as const // Opens in the same tab
+              };
+              
+              console.log('Checkout options:', {
+                paymentSessionId: checkoutOptions.paymentSessionId.substring(0, 50) + '...',
+                redirectTarget: checkoutOptions.redirectTarget,
+                sessionIdLength: checkoutOptions.paymentSessionId.length
+              });
+              
+              cashfree.checkout(checkoutOptions);
+            } catch (error: any) {
+              console.error('Error opening Cashfree checkout:', error);
+              console.error('Error details:', {
+                message: error.message,
+                stack: error.stack,
+                sessionId: exactPaymentSessionId.substring(0, 50) + '...'
+              });
+              // Fallback to direct URL redirect if SDK fails
+              if (paymentResponse.data?.paymentLink) {
+                console.log('Falling back to direct URL redirect');
+                window.location.href = paymentResponse.data.paymentLink;
+              } else {
+                setError('Failed to initialize Cashfree checkout: ' + (error.message || 'Unknown error'));
+                setIsProcessing(false);
+              }
+            }
+          } else {
+            // SDK not loaded yet, wait and retry (with timeout)
+            console.log('Cashfree SDK not loaded yet, waiting...');
+            let retryCount = 0;
+            const maxRetries = 10; // 5 seconds total (10 * 500ms)
+            
+            const checkSDK = setInterval(() => {
+              retryCount++;
+              if ((window as any).Cashfree) {
+                clearInterval(checkSDK);
+                openCashfreeCheckout();
+              } else if (retryCount >= maxRetries) {
+                clearInterval(checkSDK);
+                // If SDK still not loaded after wait, try fallback
+                if (paymentResponse.data?.paymentLink) {
+                  console.log('SDK not loaded after timeout, using fallback URL redirect');
+                  window.location.href = paymentResponse.data.paymentLink;
+                } else {
+                  setError('Cashfree payment SDK failed to load. Please refresh the page and try again.');
+                  setIsProcessing(false);
+                }
+              }
+            }, 500);
+          }
+        };
+        
+        // Try to open checkout (will retry if SDK not ready)
+        openCashfreeCheckout();
       } else {
         setError(paymentResponse.message || 'Failed to initiate payment. Please try again.');
         setIsProcessing(false);
@@ -346,7 +453,7 @@ export default function CartPage() {
   const totalPrice = getTotalPrice();
   const deliveryCharges = 0; // Free delivery
   const codCharges = paymentMethod === 'cod' ? 0 : 0; // Can add COD charges if needed
-  const onlineDiscount = paymentMethod === 'online' ? 30 : paymentMethod === 'upi' ? 30 : paymentMethod === 'cashfree' ? 30 : 0;
+  const onlineDiscount = paymentMethod === 'cashfree' ? 30 : 0;
   const finalTotal = totalPrice + deliveryCharges + codCharges - onlineDiscount;
 
   // Order Success Modal
@@ -709,58 +816,6 @@ export default function CartPage() {
                       </div>
                     </label>
 
-                    {/* UPI Payment */}
-                    <label className={`flex items-start gap-4 p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                      paymentMethod === 'upi' ? 'border-green-600 bg-green-50' : 'border-gray-200 hover:border-gray-300'
-                    }`}>
-                      <input
-                        type="radio"
-                        name="payment"
-                        value="upi"
-                        checked={paymentMethod === 'upi'}
-                        onChange={() => setPaymentMethod('upi')}
-                        className="mt-1 w-5 h-5 text-green-600 focus:ring-green-500"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                            <Smartphone className="w-6 h-6 text-purple-600" />
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-gray-900">UPI Payment</h3>
-                            <p className="text-sm text-gray-600">Google Pay, PhonePe, Paytm, etc.</p>
-                            <span className="inline-block mt-1 text-xs font-semibold text-green-600 bg-green-100 px-2 py-0.5 rounded">Save ₹30</span>
-                          </div>
-                        </div>
-                      </div>
-                    </label>
-
-                    {/* Online Payment */}
-                    <label className={`flex items-start gap-4 p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                      paymentMethod === 'online' ? 'border-green-600 bg-green-50' : 'border-gray-200 hover:border-gray-300'
-                    }`}>
-                      <input
-                        type="radio"
-                        name="payment"
-                        value="online"
-                        checked={paymentMethod === 'online'}
-                        onChange={() => setPaymentMethod('online')}
-                        className="mt-1 w-5 h-5 text-green-600 focus:ring-green-500"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                            <CreditCard className="w-6 h-6 text-blue-600" />
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-gray-900">Credit/Debit Card</h3>
-                            <p className="text-sm text-gray-600">Visa, MasterCard, RuPay</p>
-                            <span className="inline-block mt-1 text-xs font-semibold text-green-600 bg-green-100 px-2 py-0.5 rounded">Save ₹30</span>
-                          </div>
-                        </div>
-                      </div>
-                    </label>
-
                     {/* Cashfree Payment */}
                     <label className={`flex items-start gap-4 p-4 border-2 rounded-lg cursor-pointer transition-all ${
                       paymentMethod === 'cashfree' ? 'border-green-600 bg-green-50' : 'border-gray-200 hover:border-gray-300'
@@ -849,7 +904,7 @@ export default function CartPage() {
                   </div>
                   {onlineDiscount > 0 && (
                     <div className="flex justify-between text-green-600">
-                      <span>Online Discount</span>
+                      <span>Payment Discount</span>
                       <span className="font-semibold">-₹{onlineDiscount}</span>
                     </div>
                   )}
@@ -877,9 +932,7 @@ export default function CartPage() {
                     <>
                       {paymentMethod === 'cod' 
                         ? 'Place Order (COD)' 
-                        : paymentMethod === 'cashfree'
-                        ? 'Pay with Cashfree'
-                        : 'Pay & Place Order'}
+                        : 'Pay with Cashfree'}
                     </>
                   )}
                 </button>
