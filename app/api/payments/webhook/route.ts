@@ -39,65 +39,77 @@ export async function POST(request: NextRequest) {
     const { data, type } = webhookData;
 
     // Handle different webhook event types
+    // Extract order and payment info first
+    const orderId = data?.order?.order_id;
+    const paymentId = data?.payment?.cf_payment_id || data?.payment?.payment_id;
+    const orderAmount = data?.order?.order_amount;
+    
+    // Determine payment status based on webhook type
+    let paymentStatus = 'UNKNOWN';
     if (type === 'PAYMENT_SUCCESS_WEBHOOK' || type === 'PAYMENT_USER_CONFIRMED') {
-      const orderId = data.order?.order_id;
-      const paymentId = data.payment?.cf_payment_id || data.payment?.payment_id;
-      const paymentStatus = data.payment?.payment_status || 'SUCCESS';
-      const orderAmount = data.order?.order_amount;
-
-      if (!orderId) {
-        return NextResponse.json(
-          { success: false, message: 'Order ID missing' },
-          { status: 400 }
-        );
-      }
-
-      // Update order in backend
-      try {
-        // Find order by orderId (which should match the order number in backend)
-        // Update payment status to PAID
-        // You may need to adjust this based on your backend API structure
-        
-        // For now, we'll log the webhook data
-        console.log('Payment webhook received:', {
-          orderId,
-          paymentId,
-          paymentStatus,
-          orderAmount,
-        });
-
-        // You can add logic here to update the order in your backend
-        // Example:
-        // await axios.put(
-        //   `${API_BASE_URL}/orders/${orderId}/payment-status`,
-        //   {
-        //     paymentStatus: 'PAID',
-        //     paymentId,
-        //   },
-        //   {
-        //     headers: {
-        //       // Add auth headers if needed
-        //     },
-        //   }
-        // );
-
-      } catch (error) {
-        console.error('Error updating order from webhook:', error);
-        // Still return success to Cashfree to avoid retries for our errors
-      }
+      paymentStatus = 'SUCCESS';
     } else if (type === 'PAYMENT_FAILED_WEBHOOK' || type === 'PAYMENT_USER_DROPPED') {
-      const orderId = data.order?.order_id;
-      const paymentId = data.payment?.cf_payment_id || data.payment?.payment_id;
-      const paymentStatus = 'FAILED';
+      paymentStatus = 'FAILED';
+    } else {
+      // Try to get from payment data
+      paymentStatus = data?.payment?.payment_status || 'UNKNOWN';
+    }
 
-      console.log('Payment failed webhook received:', {
+    if (!orderId) {
+      console.warn('⚠️ Missing orderId in webhook payload');
+      return NextResponse.json(
+        { success: false, message: 'Order ID missing' },
+        { status: 400 }
+      );
+    }
+
+    // Forward webhook to backend server to update transaction
+    try {
+      const backendWebhookUrl = process.env.BACKEND_WEBHOOK_URL || process.env.BACKEND_URL || 'http://localhost:5001';
+      const backendUrl = `${backendWebhookUrl}/api/payments/webhook`;
+      
+      console.log('Forwarding webhook to backend:', backendUrl);
+      console.log('Payment webhook received:', {
         orderId,
         paymentId,
         paymentStatus,
+        orderAmount,
+        type,
       });
 
-      // Update order in backend to mark payment as failed
-      // Similar to success handler above
+      // Forward the webhook to backend server with normalized format
+      const response = await fetch(backendUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          orderId,
+          paymentId,
+          paymentStatus, // Already normalized to SUCCESS or FAILED
+          orderAmount,
+        }),
+      });
+
+      if (!response.ok) {
+        console.error('Backend webhook response not OK:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('Backend error:', errorText);
+      } else {
+        const result = await response.json();
+        console.log('✅ Backend webhook processed successfully:', result);
+      }
+    } catch (error: any) {
+      console.error('❌ Error forwarding webhook to backend:', error);
+      // Still return success to Cashfree to avoid retries for our errors
+    }
+
+    // Handle different webhook event types (legacy - keeping for reference)
+    if (type === 'PAYMENT_SUCCESS_WEBHOOK' || type === 'PAYMENT_USER_CONFIRMED') {
+      // Already handled above
+    }
+    } else if (type === 'PAYMENT_FAILED_WEBHOOK' || type === 'PAYMENT_USER_DROPPED') {
+      // Already handled in the unified handler above
     }
 
     // Always return success to Cashfree
