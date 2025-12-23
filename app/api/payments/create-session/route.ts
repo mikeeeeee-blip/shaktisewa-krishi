@@ -109,28 +109,12 @@ export async function POST(request: NextRequest) {
       console.log('Added HTTPS protocol:', origin);
     }
     
-    // Prepare order data for Cashfree according to latest API (v2025-01-01)
-    // Reference: https://www.cashfree.com/docs/api-reference/payments/latest/orders/create
-    const orderData: any = {
-      order_id: orderId,
-      order_amount: Number(orderAmount), // Amount as number (Cashfree accepts both string and number)
-      order_currency: 'INR',
-      customer_details: {
-        customer_id: customerDetails.customerId || `customer_${Date.now()}`,
-        customer_name: customerDetails.customerName,
-        customer_email: customerDetails.customerEmail,
-        customer_phone: customerDetails.customerPhone?.toString().replace(/\D/g, ''), // Remove non-digits, keep only numbers
-      },
-    };
-
-    // Add order_meta - Cashfree REQUIRES return_url for valid payment sessions
-    // Without a valid, publicly accessible HTTPS return_url, the session will be invalid
-    // Note: Cashfree doesn't support placeholders like {order_id} - use actual order ID
-    let returnUrl: string | null = null;
-    let notifyUrl: string | null = null;
-
+    // Prepare payment link data for Cashfree Payment Links API
+    // Reference: https://www.cashfree.com/docs/api-reference/payments/previous/v2023-08-01/payment-links/create
+    // Using Payment Links API instead of Orders API for simpler integration
+    
+    // Validate origin for return_url
     if (!origin || origin.includes('localhost')) {
-      // If we still have localhost, fail with helpful error message
       console.error('❌ Cannot use localhost as return_url. Cashfree requires publicly accessible HTTPS URL.');
       return NextResponse.json(
         {
@@ -146,48 +130,43 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Both return_url and notify_url must be HTTPS and publicly accessible
-    returnUrl = `${origin}/api/payments/verify?order_id=${orderId}`;
-    notifyUrl = `${origin}/api/payments/webhook`;
+    // Generate unique link_id (similar to order_id but for payment links)
+    // Link ID must be alphanumeric with - and _ only, max 50 characters
+    const linkId = orderId.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 50);
+    
+    // Prepare return and notify URLs
+    const returnUrl = `${origin}/api/payments/verify?order_id=${orderId}`;
+    const notifyUrl = `${origin}/api/payments/webhook`;
     
     console.log('✅ Using publicly accessible HTTPS URLs:');
     console.log('   Return URL:', returnUrl);
     console.log('   Notify URL:', notifyUrl);
 
-    // Always set order_meta with return_url - this is REQUIRED for valid sessions
-    if (returnUrl) {
-      orderData.order_meta = {
-        return_url: returnUrl,
-        notify_url: notifyUrl || returnUrl.replace('/verify', '/webhook'),
-        // Cashfree payment method codes: cc,dc,ppc,ccc,emi,paypal,upi,nb,app,paylater,applepay
-        // nb = netbanking, app = wallet
-        payment_methods: 'cc,dc,upi,nb,app,paylater,emi',
-      };
-      console.log('Setting order_meta with return_url:', {
+    // Prepare payment link payload
+    const linkData: any = {
+      link_id: linkId,
+      link_amount: Number(orderAmount), // Amount as number
+      link_currency: 'INR',
+      link_purpose: `Payment for order ${orderId}`, // Description/purpose for the payment link
+      customer_details: {
+        customer_name: customerDetails.customerName,
+        customer_email: customerDetails.customerEmail,
+        customer_phone: customerDetails.customerPhone?.toString().replace(/\D/g, ''), // Remove non-digits
+      },
+      link_meta: {
         return_url: returnUrl,
         notify_url: notifyUrl,
-        env: CASHFREE_ENV,
-      });
-    } else {
-      // This should never happen due to check above, but just in case
-      console.error('No return_url available - session will be invalid');
-      return NextResponse.json(
-        {
-          success: false,
-          message: 'Unable to set return_url. Payment session cannot be created.',
-        },
-        { status: 400 }
-      );
-    }
+      },
+    };
 
-    console.log('Creating Cashfree payment session (v2025-01-01):', {
-      url: `${CASHFREE_API_URL}/orders`,
-      orderId,
-      orderAmount,
+    console.log('Creating Cashfree payment link (v2023-08-01):', {
+      url: `${CASHFREE_API_URL}/links`,
+      linkId,
+      linkAmount: orderAmount,
       hasAppId: !!CASHFREE_APP_ID,
       hasSecretKey: !!CASHFREE_SECRET_KEY,
       env: CASHFREE_ENV,
-      apiVersion: '2025-01-01',
+      apiVersion: '2023-08-01',
     });
 
     // Create payment session with Cashfree
@@ -206,13 +185,13 @@ export async function POST(request: NextRequest) {
         }
 
         cashfreeResponse = await axios.post(
-          `${CASHFREE_API_URL}/orders`,
-          orderData,
+          `${CASHFREE_API_URL}/links`,
+          linkData,
           {
             headers: {
               'x-client-id': CASHFREE_APP_ID!,
               'x-client-secret': CASHFREE_SECRET_KEY!,
-              'x-api-version': '2025-01-01', // Using latest API version as per official docs
+              'x-api-version': '2023-08-01', // Payment Links API version
               'Content-Type': 'application/json',
             },
             timeout: 30000, // 30 second timeout
@@ -269,7 +248,7 @@ export async function POST(request: NextRequest) {
 3. Firewall/proxy settings blocking ${CASHFREE_ENV === 'PRODUCTION' ? 'api.cashfree.com' : 'sandbox.cashfree.com'}
 4. If on Vercel/serverless, check network configuration`,
             troubleshooting: {
-              endpoint: `${CASHFREE_API_URL}/orders`,
+              endpoint: `${CASHFREE_API_URL}/links`,
               environment: CASHFREE_ENV,
               suggestion: 'Try testing the connection manually: curl -X GET https://' + (CASHFREE_ENV === 'PRODUCTION' ? 'api.cashfree.com' : 'sandbox.cashfree.com'),
             },
@@ -346,104 +325,75 @@ export async function POST(request: NextRequest) {
     }
 
     // Log the full response for debugging
-    console.log('✅ Cashfree order created successfully');
+    console.log('✅ Cashfree payment link created successfully');
     console.log('Full Cashfree response:', JSON.stringify(cashfreeResponse.data, null, 2));
 
     const { 
-      payment_session_id, 
-      payment_link,
-      cf_order_id,
-      order_status,
-      order_id: cfOrderId,
-      order_amount,
-      order_currency,
-      order_meta: responseOrderMeta
+      link_url,
+      cf_link_id,
+      link_id: cfLinkId,
+      link_status,
+      link_amount,
+      link_currency,
+      link_meta: responseLinkMeta
     } = cashfreeResponse.data;
 
-    // Verify order was created successfully
-    if (!payment_session_id) {
-      console.error('❌ Invalid Cashfree response - missing payment_session_id:', cashfreeResponse.data);
+    // Verify payment link was created successfully
+    if (!link_url) {
+      console.error('❌ Invalid Cashfree response - missing link_url:', cashfreeResponse.data);
       return NextResponse.json(
         { 
           success: false, 
-          message: 'Failed to create payment session - invalid response from Cashfree',
-          details: 'Missing payment_session_id in response'
+          message: 'Failed to create payment link - invalid response from Cashfree',
+          details: 'Missing link_url in response'
         },
         { status: 500 }
       );
     }
 
-    // Verify order status is ACTIVE
-    if (order_status && order_status !== 'ACTIVE') {
-      console.warn('⚠️ Cashfree order status is not ACTIVE:', order_status);
-      console.warn('   Order Status:', order_status);
-      console.warn('   CF Order ID:', cf_order_id);
+    // Verify link status
+    if (link_status && link_status !== 'ACTIVE') {
+      console.warn('⚠️ Cashfree link status is not ACTIVE:', link_status);
+      console.warn('   Link Status:', link_status);
+      console.warn('   CF Link ID:', cf_link_id);
       // Still proceed, but log the warning
     }
 
-    console.log('📋 Order Details:');
-    console.log('   CF Order ID:', cf_order_id);
-    console.log('   Order Status:', order_status || 'Not provided');
-    console.log('   Order ID:', cfOrderId || orderId);
-    console.log('   Payment Session ID:', payment_session_id);
-    console.log('   Payment Link (from response):', payment_link || 'Not provided');
+    console.log('📋 Payment Link Details:');
+    console.log('   CF Link ID:', cf_link_id);
+    console.log('   Link Status:', link_status || 'Not provided');
+    console.log('   Link ID:', cfLinkId || linkId);
+    console.log('   Link URL (from response):', link_url);
+    console.log('   Link Amount:', link_amount);
+    console.log('   Link Currency:', link_currency);
 
-    // Construct payment link
-    // Priority 1: Use payment_link from Cashfree response if provided (most reliable)
-    // Priority 2: Construct using payment_session_id
-    // Cashfree payment link format for user-facing checkout page
-    // Both Production and Sandbox use the same payments domain: https://payments.cashfree.com/order/#{payment_session_id}
-    // The environment is determined by the credentials used, not the domain
-    let finalPaymentLink = payment_link;
+    // Use the link_url directly from Cashfree response (no construction needed)
+    const finalPaymentLink = link_url;
     
-    // Clean the payment_session_id if it has any issues (like "paymentpayment" suffix)
-    let cleanPaymentSessionId = payment_session_id;
-    if (cleanPaymentSessionId && cleanPaymentSessionId.endsWith('paymentpayment')) {
-      cleanPaymentSessionId = cleanPaymentSessionId.replace(/paymentpayment$/, '');
-      console.log('⚠️ Removed "paymentpayment" suffix from payment_session_id');
-      console.log('   Original:', payment_session_id);
-      console.log('   Cleaned:', cleanPaymentSessionId);
-    }
-    
-    if (finalPaymentLink) {
-      console.log('✅ Using payment_link from Cashfree response');
-      console.log('   Original payment_link:', finalPaymentLink);
-      
-      // Verify and fix the payment_link format for both environments
-      if (finalPaymentLink.includes('order_token=')) {
-        // Extract session ID from order_token parameter if present
-        const urlMatch = finalPaymentLink.match(/order_token=([^&]+)/);
-        if (urlMatch && urlMatch[1]) {
-          const extractedSessionId = decodeURIComponent(urlMatch[1]);
-          // Both environments use the same payments domain
-          finalPaymentLink = `https://payments.cashfree.com/order/#${extractedSessionId}`;
-          console.log('   ✅ Converted to correct format: #payment_session_id');
-        }
-      } else if (!finalPaymentLink.includes('#')) {
-        // If no hash, add it with payment_session_id
-        finalPaymentLink = `https://payments.cashfree.com/order/#${cleanPaymentSessionId}`;
-        console.log('   ✅ Added #payment_session_id to URL');
-      } else if (finalPaymentLink.includes('payments.sandbox.cashfree.com')) {
-        // Convert any sandbox-specific domain to the standard payments domain
-        finalPaymentLink = finalPaymentLink.replace('payments.sandbox.cashfree.com', 'payments.cashfree.com');
-        console.log('   ✅ Converted to standard payments domain');
-      }
-    } else if (cleanPaymentSessionId) {
-      // Construct payment link from payment_session_id
-      // Both Production and Sandbox use the same payments domain
-      finalPaymentLink = `https://payments.cashfree.com/order/#${cleanPaymentSessionId}`;
-      console.log('✅ Constructed payment link from payment_session_id');
-    }
-
     console.log('\n🔗 Final Payment Link:');
     console.log('   URL:', finalPaymentLink);
-    const sessionIdToCheck = cleanPaymentSessionId || payment_session_id;
-    console.log('   Contains payment_session_id:', finalPaymentLink?.includes(sessionIdToCheck) ? 'Yes' : 'No');
-    // Both environments use the same payments domain
-    const isCorrectFormat = finalPaymentLink?.startsWith('https://payments.cashfree.com/order/#');
-    console.log('   Format correct:', isCorrectFormat ? 'Yes' : 'No');
+    console.log('   URL Length:', finalPaymentLink?.length || 0);
     console.log('   Environment:', CASHFREE_ENV);
-    console.log('   Note: Both sandbox and production use the same payments.cashfree.com domain');
+    console.log('   Note: Using direct link_url from Cashfree Payment Links API');
+    
+    // Final validation
+    if (!finalPaymentLink || !finalPaymentLink.startsWith('http')) {
+      console.error('❌ Payment link validation failed!');
+      console.error('   URL:', finalPaymentLink);
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Invalid payment link URL from Cashfree',
+          details: {
+            error: 'Invalid link_url in response',
+            linkUrl: finalPaymentLink,
+          }
+        },
+        { status: 500 }
+      );
+    }
+    
+    console.log('✅ Payment link validation passed');
 
     // Helper function to validate MongoDB ObjectId format
     const isValidObjectId = (id: string): boolean => {
@@ -473,7 +423,7 @@ export async function POST(request: NextRequest) {
               paymentMethod: 'ONLINE',
               paymentStatus: 'PENDING',
               paymentGateway: 'CASHFREE',
-              paymentSessionId: payment_session_id,
+              paymentSessionId: cf_link_id || linkId, // Use CF Link ID as session identifier
               customerNotes: `Payment via Cashfree - Order ID: ${orderId}`,
             },
             {
@@ -516,24 +466,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('\n✅ Payment session created successfully');
+    console.log('\n✅ Payment link created successfully');
     console.log('   Final Payment Link:', finalPaymentLink);
-    console.log('   CF Order ID:', cf_order_id || 'Not provided');
-    console.log('   Order Status:', order_status || 'Not provided');
+    console.log('   CF Link ID:', cf_link_id || 'Not provided');
+    console.log('   Link Status:', link_status || 'Not provided');
 
     return NextResponse.json({
       success: true,
       data: {
-        paymentSessionId: payment_session_id,
-        paymentLink: finalPaymentLink,
-        orderId: cfOrderId || orderId,
-        cfOrderId: cf_order_id,
-        orderStatus: order_status,
+        paymentSessionId: cf_link_id || linkId, // CF Link ID
+        paymentLink: finalPaymentLink, // Direct link_url from Cashfree
+        orderId: orderId, // Original order ID
+        cfLinkId: cf_link_id,
+        linkStatus: link_status,
+        linkId: cfLinkId || linkId,
       },
-      // Add troubleshooting info if order status is not ACTIVE
-      ...(order_status && order_status !== 'ACTIVE' ? {
-        warning: `Order status is '${order_status}' instead of 'ACTIVE'. This may cause payment issues.`,
-        troubleshooting: 'Please verify your Cashfree account configuration and ensure transactions are enabled.'
+      // Add troubleshooting info if link status is not ACTIVE
+      ...(link_status && link_status !== 'ACTIVE' ? {
+        warning: `Link status is '${link_status}' instead of 'ACTIVE'. This may cause payment issues.`,
+        troubleshooting: 'Please verify your Cashfree account configuration and ensure payment links are enabled.'
       } : {})
     });
   } catch (error: any) {
