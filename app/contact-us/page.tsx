@@ -68,9 +68,7 @@ export default function ContactUsPage() {
             </div>
             <h3 className="font-semibold text-gray-900 mb-2">Call Us</h3>
             <p className="text-gray-600 text-sm mb-2">Mon-Sat, 9AM-6PM</p>
-            <a href="tel:7065060162" className="text-green-600 font-semibold hover:underline">7065060162</a>
-            <br />
-            <a href="tel:7428208822" className="text-green-600 font-semibold hover:underline">7428208822</a>
+            <a href="tel:9243143997" className="text-green-600 font-semibold hover:underline">*9243143997</a>
           </div>
           
           <div className="feature-card text-center">
@@ -90,7 +88,7 @@ export default function ContactUsPage() {
             </div>
             <h3 className="font-semibold text-gray-900 mb-2">WhatsApp</h3>
             <p className="text-gray-600 text-sm mb-2">Quick responses</p>
-            <a href="https://wa.me/917065060162" className="text-green-600 font-semibold hover:underline" target="_blank" rel="noopener noreferrer">
+            <a href="https://wa.me/919243143997" className="text-green-600 font-semibold hover:underline" target="_blank" rel="noopener noreferrer">
               Chat with us
             </a>
           </div>
@@ -211,9 +209,8 @@ export default function ContactUsPage() {
                   <Phone className="contact-icon" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900">Phone Numbers</h3>
-                  <p className="text-gray-600">7065060162</p>
-                  <p className="text-gray-600">7428208822</p>
+                  <h3 className="font-semibold text-gray-900">Phone Number</h3>
+                  <p className="text-gray-600">*9243143997</p>
                 </div>
               </div>
               
@@ -235,10 +232,10 @@ export default function ContactUsPage() {
                 <div>
                   <h3 className="font-semibold text-gray-900">Office Address</h3>
                   <p className="text-gray-600">
-                    ShaktiSewa Pvt. Ltd.<br />
-                    Sector 62, Noida<br />
-                    Uttar Pradesh - 201301<br />
-                    India
+                    SHAKTISEWA FOUNDATION<br />
+                    MR.3. 353, MAHALAXMI NAGAR<br />
+                    Indore Tukoganj, Indore<br />
+                    Indore- 452001, Madhya Pradesh
                   </p>
                 </div>
               </div>
@@ -273,10 +270,10 @@ export default function ContactUsPage() {
             For urgent queries, please call us directly or send us a WhatsApp message for quick responses.
           </p>
           <div className="flex flex-wrap gap-4">
-            <a href="tel:7065060162" className="inline-flex items-center gap-2 text-green-600 font-semibold hover:underline">
+            <a href="tel:9243143997" className="inline-flex items-center gap-2 text-green-600 font-semibold hover:underline">
               <Phone className="w-4 h-4" /> Call Now
             </a>
-            <a href="https://wa.me/917065060162" className="inline-flex items-center gap-2 text-green-600 font-semibold hover:underline" target="_blank" rel="noopener noreferrer">
+            <a href="https://wa.me/919243143997" className="inline-flex items-center gap-2 text-green-600 font-semibold hover:underline" target="_blank" rel="noopener noreferrer">
               <MessageCircle className="w-4 h-4" /> WhatsApp
             </a>
             <a href="mailto:support@shaktisewa.com" className="inline-flex items-center gap-2 text-green-600 font-semibold hover:underline">

@@ -220,7 +220,7 @@ export default function SellOnEclatAgroxglobalPage() {
               <Mail className="w-5 h-5" />
               Register Now
             </a>
-            <a href="tel:7065060162" className="cta-banner-btn-secondary">
+            <a href="tel:9243143997" className="cta-banner-btn-secondary">
               <Phone className="w-5 h-5" />
               Talk to Us
             </a>
@@ -240,7 +240,7 @@ export default function SellOnEclatAgroxglobalPage() {
             </p>
             <p className="flex items-center gap-2">
               <Phone className="w-5 h-5 text-green-600" />
-              <span>7065060162 / 7428208822</span>
+              <span>*9243143997</span>
             </p>
           </div>
         </div>

@@ -5,12 +5,11 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
 
 const banners = [
-  '/banner/1.webp',
-  '/banner/2.webp',
-  '/banner/3.webp',
-  '/banner/4.webp',
-  '/banner/5.webp',
-  '/banner/6.webp',
+  '/banner/ECLAT AGROXGLOBAL Website Banner 1.jpg',
+  '/banner/ECLAT AGROXGLOBAL Website Banner 2.jpg',
+  '/banner/ECLAT AGROXGLOBAL Website Banner 3.jpg',
+  '/banner/ECLAT AGROXGLOBAL Website Banner 4.jpg',
+  '/banner/ECLAT AGROXGLOBAL Website Banner 5.jpg',
 ];
 
 export default function Carousel() {

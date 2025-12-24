@@ -74,7 +74,7 @@ export const productData = {
       pickupAddress: 'Rajkot, GUJARAT, 360005',
       addressOfOrigin: 'No. 308, Haridarshan Arcade, Near Balaji Hall 150 Feet Ring Road, Rajkot, Gujarat 360004',
     },
-    phoneNumber: '9016760339',
+    phoneNumber: '*9243143997',
     pricePerUnit: '(₹87.00 /100 gm)',
     freeDelivery: true,
     isBestSeller: true,
@@ -160,7 +160,7 @@ export const productData = {
       pickupAddress: 'Rajkot, GUJARAT, 360005',
       addressOfOrigin: 'OFFICE NO 608, 6 FLOOR, NORTH BLOCK, TWIN STAR, NANA MAVA, RAJKOT, GUJARAT 360005',
     },
-    phoneNumber: '9016760339',
+    phoneNumber: '*9243143997',
     pricePerUnit: '(₹124.40 /100 ml)',
     freeDelivery: true,
     isBestSeller: true,
@@ -262,7 +262,7 @@ export const productData = {
       pickupAddress: 'Rajkot, GUJARAT, 360005',
       addressOfOrigin: 'OFFICE NO 608, 6 FLOOR, NORTH BLOCK, TWIN STAR, NANA MAVA, RAJKOT, GUJARAT 360005',
     },
-    phoneNumber: '9016760339',
+    phoneNumber: '*9243143997',
     pricePerUnit: '(₹723.33 /100 ml)',
     freeDelivery: true,
     isBestSeller: true,
@@ -355,7 +355,7 @@ export const productData = {
       pickupAddress: 'Rajkot, GUJARAT, 360005',
       addressOfOrigin: 'OFFICE NO 608, 6 FLOOR, NORTH BLOCK, TWIN STAR, NANA MAVA, RAJKOT, GUJARAT 360005',
     },
-    phoneNumber: '9016760339',
+    phoneNumber: '*9243143997',
     pricePerUnit: '(₹42.60 /100 ml)',
     freeDelivery: true,
     isBestSeller: true,
@@ -510,7 +510,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹114.40 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -777,7 +777,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹54.50 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -874,7 +874,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -976,7 +976,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -1055,7 +1055,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -1162,7 +1162,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -1281,7 +1281,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -1349,7 +1349,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹141.00 /100 gm)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -1596,7 +1596,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹166.00 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -1802,7 +1802,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹58.60 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -2028,7 +2028,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹159.10 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -2240,7 +2240,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹134.40 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -2469,7 +2469,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹109.30 /100 gm)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -2694,7 +2694,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹126.50 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -2829,7 +2829,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹4790.00 /100 gm)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -2950,7 +2950,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹2450.00 /100 gm)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -3079,7 +3079,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹387.20 /100 gm)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -3242,7 +3242,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹2174.00 /100 gm)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -3401,7 +3401,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹43.48 /100 gm)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -3512,7 +3512,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹5770.00 /100 gm)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -3626,7 +3626,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -3716,7 +3716,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -3820,7 +3820,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -3968,7 +3968,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -4214,7 +4214,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -4350,7 +4350,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -4555,7 +4555,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹31.50 /100 gm)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -4844,7 +4844,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹18.12 /100 gm)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -5041,7 +5041,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹67.30 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -5164,7 +5164,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹20.88 /100 gm)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -5303,7 +5303,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹266.80 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -5481,7 +5481,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹30.00 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -5680,7 +5680,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹166.50 /100 gm)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -5873,7 +5873,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹90.70 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -6139,7 +6139,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹47.70 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -6291,7 +6291,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹73.80 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -6468,7 +6468,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹222.90 /100 gm)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -6560,7 +6560,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -6652,7 +6652,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -6744,7 +6744,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -6868,7 +6868,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -6988,7 +6988,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -7136,7 +7136,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -7336,7 +7336,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -7402,7 +7402,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -7468,7 +7468,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -7550,7 +7550,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -7626,7 +7626,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -7695,7 +7695,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -7939,7 +7939,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹9.01 /100 gm)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -8158,7 +8158,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹82.80 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -8251,7 +8251,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": null,
     "freeDelivery": null,
     "isBestSeller": null
@@ -8471,7 +8471,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹82.60 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -8623,7 +8623,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹121.00 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -8774,7 +8774,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹98.20 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -8899,7 +8899,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹180.00 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -9030,7 +9030,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹56.00 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -9161,7 +9161,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹116.70 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -9295,7 +9295,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹104.80 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -9405,7 +9405,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹82.20 /100 gm)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -9514,7 +9514,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹129.20 /100 gm)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -9625,7 +9625,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹134.00 /100 gm)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -9975,7 +9975,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹74.00 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -10227,7 +10227,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹165.20 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -10431,7 +10431,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹54.60 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -10693,7 +10693,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹402.00 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -10896,7 +10896,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹94.80 /100 gm)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -11101,7 +11101,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹269.20 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -11169,7 +11169,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹16.68 /100 gm)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -11381,7 +11381,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹168.80 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -11595,7 +11595,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹114.40 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -11779,7 +11779,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹203.60 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -11929,7 +11929,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹44.70 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null
@@ -12095,7 +12095,7 @@ export const productData = {
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹47.30 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null

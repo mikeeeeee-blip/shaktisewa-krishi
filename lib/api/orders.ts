@@ -54,8 +54,12 @@ export const getUserOrders = async (filters: OrderFilters = {}) => {
 export const createOrder = async (orderData: {
   items: Array<{
     productId: string;
+    productName?: string; // Product name (required by backend)
     variantId?: string;
+    variantName?: string; // Variant name if available
     quantity: number;
+    price?: number; // Product price
+    brand?: string; // Product brand
   }>;
   shippingAddress: any;
   billingAddress?: any;
@@ -63,6 +67,7 @@ export const createOrder = async (orderData: {
   couponCode?: string;
   customerNotes?: string;
 }) => {
+  // Let backend handle validation - it will return proper error messages
   const response = await axios.post(`${API_BASE_URL}/orders`, orderData, {
     headers: getAuthHeaders(),
   });

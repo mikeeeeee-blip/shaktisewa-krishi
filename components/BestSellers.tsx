@@ -416,7 +416,7 @@ const fallbackProducts = [
       "pickupAddress": null,
       "addressOfOrigin": null
     },
-    "phoneNumber": "7428208822",
+    "phoneNumber": "*9243143997",
     "pricePerUnit": "(₹54.50 /100 ml)",
     "freeDelivery": null,
     "isBestSeller": null

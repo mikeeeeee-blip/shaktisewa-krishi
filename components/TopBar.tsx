@@ -11,15 +11,12 @@ export default function TopBar() {
       <div className="w-full px-2 sm:px-3 md:px-4 lg:px-6 max-w-7xl mx-auto">
         <div className="flex items-center justify-between py-2 sm:py-2.5 md:py-3 gap-2">
           <div className="flex items-center gap-2 sm:gap-3 md:gap-4 lg:gap-6 overflow-x-auto scrollbar-hide flex-1 min-w-0">
-            <a href="tel:7065060162" className="flex items-center gap-1 sm:gap-1.5 hover:opacity-90 transition-opacity font-medium text-[11px] xs:text-xs sm:text-sm whitespace-nowrap flex-shrink-0">
+            <a href="tel:9243143997" className="flex items-center gap-1 sm:gap-1.5 hover:opacity-90 transition-opacity font-medium text-[11px] xs:text-xs sm:text-sm whitespace-nowrap flex-shrink-0">
               <Phone size={12} className="sm:w-3.5 sm:h-3.5" />
-              <span className="hidden xs:inline">Missed call to order: </span>
-              <span>7065060162</span>
+              <span className="hidden xs:inline">Call us: </span>
+              <span>*9243143997</span>
             </a>
-            <a href="tel:7428208822" className="flex items-center gap-1 sm:gap-1.5 hover:opacity-90 transition-opacity font-medium text-[11px] xs:text-xs sm:text-sm hidden sm:inline whitespace-nowrap flex-shrink-0">
-              <span>Need help? Call us: 7428208822</span>
-            </a>
-            <span className="whitespace-nowrap font-medium text-[11px] xs:text-xs sm:text-sm hidden md:inline flex-shrink-0">Order: 7065060162 | Help: 7428208822</span>
+            <span className="whitespace-nowrap font-medium text-[11px] xs:text-xs sm:text-sm hidden md:inline flex-shrink-0">Contact: *9243143997</span>
           </div>
           <div className="flex items-center gap-2 sm:gap-2.5 md:gap-3 lg:gap-4 flex-shrink-0">
             <div className="relative">

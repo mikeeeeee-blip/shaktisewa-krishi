@@ -187,11 +187,22 @@ export default function CartPage() {
     setError(null);
 
     try {
-      // Prepare order items
+      // Check if cart is empty
+      if (items.length === 0) {
+        setError('Your cart is empty. Please add products before placing an order.');
+        setIsProcessing(false);
+        return;
+      }
+
+      // Prepare order items with product details
       const orderItems = items.map(item => ({
         productId: item.productId,
+        productName: item.name, // Include product name as required by backend
         variantId: undefined, // Variants don't have IDs in current data structure
+        variantName: item.variant || undefined, // Include variant name if available
         quantity: item.count,
+        price: item.price, // Include price for reference
+        brand: item.brand || undefined, // Include brand if available
       }));
 
       // Prepare shipping address
@@ -233,8 +244,24 @@ export default function CartPage() {
         });
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to place order. Please try again.');
       console.error('Order placement error:', err);
+      
+      // Extract error message from backend response
+      let errorMessage = 'Failed to place order. Please try again.';
+      
+      if (err.response?.data) {
+        const errorData = err.response.data;
+        errorMessage = errorData.message || errorData.error || errorMessage;
+        
+        // If backend says invalid productId, provide helpful message
+        if (errorMessage.includes('Invalid _id') || errorMessage.includes('ObjectId')) {
+          errorMessage = 'Some products in your cart are not available. Please remove them and try again, or add products from the product catalog.';
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsProcessing(false);
     }
@@ -255,11 +282,15 @@ export default function CartPage() {
       const onlineDiscount = 30;
       const finalTotal = totalPrice + deliveryCharges - onlineDiscount;
 
-      // Prepare order items
+      // Prepare order items with product details
       const orderItems = items.map(item => ({
         productId: item.productId,
+        productName: item.name, // Include product name as required by backend
         variantId: undefined,
+        variantName: item.variant || undefined, // Include variant name if available
         quantity: item.count,
+        price: item.price, // Include price for reference
+        brand: item.brand || undefined, // Include brand if available
       }));
 
       // Prepare shipping address

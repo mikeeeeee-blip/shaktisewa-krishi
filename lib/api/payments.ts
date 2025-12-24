@@ -31,8 +31,12 @@ export interface CreatePaymentSessionRequest {
   billingAddress?: any;
   items: Array<{
     productId: string;
+    productName?: string; // Product name (required by backend)
     variantId?: string;
+    variantName?: string; // Variant name if available
     quantity: number;
+    price?: number; // Product price
+    brand?: string; // Product brand
   }>;
 }
 
