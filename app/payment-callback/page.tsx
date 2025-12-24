@@ -1,27 +1,38 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 function PaymentCallbackContent() {
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
-  const [message, setMessage] = useState('Processing payment confirmation...');
 
   useEffect(() => {
-    // Fallback timeout - ensure we always resolve after 15 seconds max
+    // Remove title and favicon
+    document.title = '';
+    const existingFavicon = document.querySelector("link[rel='icon']");
+    if (existingFavicon) existingFavicon.remove();
+    const existingAppleIcon = document.querySelector("link[rel='apple-touch-icon']");
+    if (existingAppleIcon) existingAppleIcon.remove();
+    
+    // Set body and html background to black
+    document.body.style.backgroundColor = '#000000';
+    document.body.style.margin = '0';
+    document.body.style.padding = '0';
+    document.documentElement.style.backgroundColor = '#000000';
+    document.documentElement.style.margin = '0';
+    document.documentElement.style.padding = '0';
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+
+    // Fallback timeout - ensure we always close after 3 seconds max
     const fallbackTimeout = setTimeout(() => {
-      console.warn('Payment callback timeout - proceeding anyway');
-      setStatus('success');
-      setMessage('Payment processed. Closing window...');
-      setTimeout(() => {
-        try {
-          window.close();
-        } catch (closeError) {
-          window.location.href = '/';
-        }
-      }, 2000);
-    }, 15000);
+      console.warn('Payment callback timeout - closing window');
+      try {
+        window.close();
+      } catch (closeError) {
+        window.location.href = '/';
+      }
+    }, 3000);
 
     const processCallback = async () => {
       try {
@@ -30,15 +41,12 @@ function PaymentCallbackContent() {
         
         if (!orderId && !transactionId) {
           clearTimeout(fallbackTimeout);
-          setStatus('error');
-          setMessage('Missing payment information');
-          setTimeout(() => {
-            try {
-              window.close();
-            } catch (closeError) {
-              window.location.href = '/';
-            }
-          }, 2000);
+          // Close immediately if missing info
+          try {
+            window.close();
+          } catch (closeError) {
+            window.location.href = '/';
+          }
           return;
         }
 
@@ -81,79 +89,38 @@ function PaymentCallbackContent() {
           callbackUrl += '?' + params.toString();
         }
         
-        try {
-          // Send callback to backend with timeout
-          // Use AbortController for timeout handling
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-          
-          console.log('Calling backend callback URL:', callbackUrl);
-          
-          const response = await fetch(callbackUrl, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            signal: controller.signal,
-          });
+        // Fire and forget - send callback to backend without waiting
+        console.log('Calling backend callback URL:', callbackUrl);
+        fetch(callbackUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }).catch(() => {
+          // Ignore errors - webhook will handle verification
+        });
 
-          clearTimeout(timeoutId);
-
-          const result = await response.json().catch(() => ({}));
-          
-          console.log('Backend callback response:', { status: response.status, result });
-          
-          if (response.ok && result.success) {
-            setStatus('success');
-            setMessage('Payment confirmed. Closing window...');
-          } else {
-            // Even if callback fails, show success - webhook will handle it
-            console.warn('Backend callback returned non-success, but proceeding (webhook will handle)');
-            setStatus('success');
-            setMessage('Payment processed. Closing window...');
-          }
-        } catch (error: any) {
-          console.error('Callback error:', error);
-          
-          // Handle timeout or network errors gracefully
-          if (error.name === 'AbortError') {
-            console.warn('Backend callback timed out, proceeding anyway (webhook will handle)');
-          } else if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-            console.warn('Network error calling backend, proceeding anyway (webhook will handle)');
-          }
-          
-          // Still show success and close - backend webhook will handle payment verification
-          setStatus('success');
-          setMessage('Payment processed. Closing window...');
-        }
-
-        // Clear fallback timeout since we've processed
+        // Clear fallback timeout since we're closing immediately
         clearTimeout(fallbackTimeout);
 
-        // Close the tab after a short delay (increased to 2 seconds for better UX)
-        setTimeout(() => {
-          try {
-            window.close();
-          } catch (closeError) {
-            // If window.close() fails (some browsers block it), redirect to a success page
-            console.log('Could not close window, redirecting to home');
-            window.location.href = '/';
-          }
-        }, 2000);
+        // Close immediately - no delay, don't wait for backend response
+        // The webhook will handle payment verification asynchronously
+        try {
+          window.close();
+        } catch (closeError) {
+          // If window.close() fails, redirect to home
+          window.location.href = '/';
+        }
 
       } catch (error) {
         console.error('Payment callback processing error:', error);
         clearTimeout(fallbackTimeout);
-        // Even on error, show success message and close - webhook will handle verification
-        setStatus('success');
-        setMessage('Payment processed. Closing window...');
-        setTimeout(() => {
-          try {
-            window.close();
-          } catch (closeError) {
-            window.location.href = '/';
-          }
-        }, 2000);
+        // Close immediately on error too
+        try {
+          window.close();
+        } catch (closeError) {
+          window.location.href = '/';
+        }
       }
     };
 
@@ -165,52 +132,36 @@ function PaymentCallbackContent() {
     };
   }, [searchParams]);
 
+  // Return black screen - no UI
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-        {status === 'processing' && (
-          <>
-            <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Processing Payment</h2>
-            <p className="text-gray-600">{message}</p>
-          </>
-        )}
-        {status === 'success' && (
-          <>
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment Confirmed</h2>
-            <p className="text-gray-600">{message}</p>
-          </>
-        )}
-        {status === 'error' && (
-          <>
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Error</h2>
-            <p className="text-gray-600">{message}</p>
-          </>
-        )}
-      </div>
-    </div>
+    <div style={{ 
+      position: 'fixed', 
+      top: 0, 
+      left: 0, 
+      width: '100%', 
+      height: '100%', 
+      backgroundColor: '#000000',
+      margin: 0,
+      padding: 0,
+      zIndex: 9999
+    }} />
   );
 }
 
 export default function PaymentCallbackPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Loading...</h2>
-        </div>
-      </div>
+      <div style={{ 
+        position: 'fixed', 
+        top: 0, 
+        left: 0, 
+        width: '100%', 
+        height: '100%', 
+        backgroundColor: '#000000',
+        margin: 0,
+        padding: 0,
+        zIndex: 9999
+      }} />
     }>
       <PaymentCallbackContent />
     </Suspense>
