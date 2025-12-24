@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     console.log('   Request Body:', JSON.stringify(body, null, 2));
-    const { orderId, orderAmount, customerDetails, shippingAddress, items, billingAddress } = body;
+    const { orderId, orderAmount, customerDetails, shippingAddress, items, billingAddress, transactionId } = body;
 
     // Validate required fields
     if (!orderId || !orderAmount || !customerDetails) {
@@ -204,7 +204,12 @@ export async function POST(request: NextRequest) {
 
     // Both return_url and notify_url must be HTTPS and publicly accessible
     // Use payment-callback page to handle callback and close tab
-    returnUrl = `${origin}/payment-callback?order_id=${orderId}`;
+    // Include transaction_id if available for better transaction lookup
+    if (transactionId) {
+      returnUrl = `${origin}/payment-callback?order_id=${orderId}&transaction_id=${transactionId}`;
+    } else {
+      returnUrl = `${origin}/payment-callback?order_id=${orderId}`;
+    }
     notifyUrl = `${origin}/api/payments/webhook`;
     
     console.log('✅ Using publicly accessible HTTPS URLs:');
@@ -379,6 +384,120 @@ export async function POST(request: NextRequest) {
         );
       }
       
+      // Handle 409 Conflict - Order already exists
+      if (error.response?.status === 409) {
+        const errorData = error.response?.data;
+        console.log('⚠️ Order already exists, fetching existing order from Cashfree...');
+        
+        try {
+          // Fetch the existing order to get its payment_session_id
+          const existingOrderResponse = await axios.get(
+            `${CASHFREE_API_URL}/orders/${orderId}`,
+            {
+              headers: {
+                'x-client-id': CASHFREE_APP_ID!,
+                'x-client-secret': CASHFREE_SECRET_KEY!,
+                'x-api-version': '2025-01-01',
+                'Accept': 'application/json',
+              },
+              timeout: 10000,
+            }
+          );
+
+          const existingOrder = existingOrderResponse.data;
+          const existingPaymentSessionId = existingOrder?.payment_session_id;
+
+          if (existingPaymentSessionId) {
+            console.log('✅ Retrieved existing payment session ID from Cashfree');
+            console.log('   Payment Session ID (raw):', existingPaymentSessionId);
+            console.log('   Payment Session ID length:', existingPaymentSessionId?.length || 0);
+            console.log('   Order Status:', existingOrder?.order_status || 'N/A');
+            
+            // Minimal cleaning - only trim whitespace, preserve the session ID as-is from Cashfree
+            // Cashfree session IDs are valid as returned, don't modify them
+            let cleanPaymentSessionId = String(existingPaymentSessionId).trim();
+            
+            // Only remove whitespace/newlines, but preserve all characters
+            cleanPaymentSessionId = cleanPaymentSessionId.replace(/[\s\r\n]+/g, '');
+            
+            // Validate it starts with session_
+            if (!cleanPaymentSessionId.startsWith('session_')) {
+              console.error('❌ Invalid session ID format from Cashfree:', cleanPaymentSessionId.substring(0, 50));
+              return NextResponse.json(
+                {
+                  success: false,
+                  message: 'Invalid payment session ID format from Cashfree',
+                  details: {
+                    orderId: orderId,
+                    sessionIdPreview: cleanPaymentSessionId.substring(0, 50),
+                  },
+                },
+                { status: 500 }
+              );
+            }
+            
+            console.log('   Payment Session ID (cleaned):', cleanPaymentSessionId.substring(0, 50) + '...');
+            console.log('   Payment Session ID length (after cleaning):', cleanPaymentSessionId.length);
+            
+            // Check order status - if already paid or failed, we might want to handle differently
+            const orderStatus = existingOrder?.order_status || 'ACTIVE';
+            let message = 'Using existing payment session for this order';
+            
+            if (orderStatus === 'PAID' || orderStatus === 'PAYMENT_SUCCESS') {
+              message = 'This order has already been paid. Payment session retrieved for verification.';
+            } else if (orderStatus === 'FAILED' || orderStatus === 'PAYMENT_FAILED') {
+              message = 'Previous payment attempt failed. Using existing payment session to retry.';
+            }
+            
+            // Return the existing session ID
+            const responseData = {
+              success: true,
+              data: {
+                paymentSessionId: cleanPaymentSessionId,
+                orderId: orderId,
+                cfOrderId: existingOrder?.cf_order_id || orderId,
+                orderStatus: orderStatus,
+                environment: CASHFREE_ENV.toLowerCase(),
+                isExistingOrder: true, // Flag to indicate this is an existing order
+              },
+              message: message,
+            };
+            
+            console.log('✅ Returning existing payment session');
+            return NextResponse.json(responseData);
+          } else {
+            // Order exists but no payment session ID - this shouldn't happen, but handle it
+            console.error('❌ Order exists but payment_session_id is missing');
+            return NextResponse.json(
+              {
+                success: false,
+                message: 'Order already exists but payment session is not available. Please use a different order ID.',
+                details: {
+                  code: errorData?.code,
+                  message: errorData?.message,
+                  orderId: orderId,
+                },
+              },
+              { status: 409 }
+            );
+          }
+        } catch (fetchError: any) {
+          console.error('❌ Error fetching existing order:', fetchError.message);
+          return NextResponse.json(
+            {
+              success: false,
+              message: errorData?.message || 'Order already exists. Unable to retrieve existing payment session.',
+              details: {
+                code: errorData?.code,
+                message: errorData?.message,
+                fetchError: fetchError.message,
+              },
+            },
+            { status: 409 }
+          );
+        }
+      }
+      
       // Handle other HTTP errors
       if (error.response?.status) {
         return NextResponse.json(
@@ -470,9 +589,19 @@ export async function POST(request: NextRequest) {
     // Cashfree session IDs must match exactly what they provide for checkout to work
     cleanPaymentSessionId = cleanPaymentSessionId.trim();
     
-    // Remove only internal whitespace/newlines (preserve all characters including any suffixes)
-    // DO NOT remove "paymentpayment" suffix - Cashfree may require it as-is
+    // Remove only internal whitespace/newlines
     cleanPaymentSessionId = cleanPaymentSessionId.replace(/[\s\r\n]+/g, '');
+    
+    // IMPORTANT: Only remove "paymentpayment" if it's clearly a suffix at the very end
+    // Do NOT use regex that stops at 'p' characters as that would break valid session IDs
+    // Cashfree session IDs can contain 'p' characters in the middle, so we must be careful
+    if (cleanPaymentSessionId.endsWith('paymentpayment')) {
+      cleanPaymentSessionId = cleanPaymentSessionId.replace(/paymentpayment$/, '');
+      console.warn('⚠️ Removed "paymentpayment" suffix from session ID');
+    }
+    
+    // If "paymentpayment" appears elsewhere (not at the end), it's likely part of a valid session ID
+    // Do NOT truncate - Cashfree session IDs are valid as returned
     
     console.log('   Using session ID as-provided by Cashfree (with minimal cleaning)');
     console.log('   Session ID length:', cleanPaymentSessionId.length);
@@ -495,14 +624,17 @@ export async function POST(request: NextRequest) {
     if (cleanPaymentSessionId.length < 50) {
       console.warn('⚠️ Payment session ID seems too short:', cleanPaymentSessionId.length);
     }
-    if (cleanPaymentSessionId.length > 500) {
-      console.warn('⚠️ Payment session ID seems too long:', cleanPaymentSessionId.length);
-      // If it's way too long, it might have duplicates - use only the first part
-      const sessionMatch = cleanPaymentSessionId.match(/^(session_[^_]+(?:_[^_]+)*)/);
-      if (sessionMatch) {
+    if (cleanPaymentSessionId.length > 1000) {
+      console.warn('⚠️ Payment session ID seems unusually long:', cleanPaymentSessionId.length);
+      // Only truncate if it's clearly malformed (has URL fragments or query params)
+      // Extract session ID before any URL fragments (?, #, &)
+      const sessionMatch = cleanPaymentSessionId.match(/^(session_[^?#&]+)/);
+      if (sessionMatch && sessionMatch[1] && sessionMatch[1].length < cleanPaymentSessionId.length) {
+        console.warn('⚠️ Extracted session ID from URL with fragments');
         cleanPaymentSessionId = sessionMatch[1];
-        console.log('⚠️ Truncated payment_session_id to first valid session ID');
       }
+      // If still too long after removing fragments, it might be a concatenation issue
+      // But don't truncate based on underscores - that would break valid session IDs
     }
 
     console.log('   Payment Session ID (after cleaning):', cleanPaymentSessionId.substring(0, 100) + '...');

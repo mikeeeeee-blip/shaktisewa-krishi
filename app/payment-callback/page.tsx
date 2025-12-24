@@ -9,16 +9,35 @@ function PaymentCallbackContent() {
   const [message, setMessage] = useState('Processing payment confirmation...');
 
   useEffect(() => {
+    // Fallback timeout - ensure we always resolve after 15 seconds max
+    const fallbackTimeout = setTimeout(() => {
+      console.warn('Payment callback timeout - proceeding anyway');
+      setStatus('success');
+      setMessage('Payment processed. Closing window...');
+      setTimeout(() => {
+        try {
+          window.close();
+        } catch (closeError) {
+          window.location.href = '/';
+        }
+      }, 2000);
+    }, 15000);
+
     const processCallback = async () => {
       try {
         const orderId = searchParams.get('order_id');
         const transactionId = searchParams.get('transaction_id');
         
         if (!orderId && !transactionId) {
+          clearTimeout(fallbackTimeout);
           setStatus('error');
           setMessage('Missing payment information');
           setTimeout(() => {
-            window.close();
+            try {
+              window.close();
+            } catch (closeError) {
+              window.location.href = '/';
+            }
           }, 2000);
           return;
         }
@@ -63,47 +82,87 @@ function PaymentCallbackContent() {
         }
         
         try {
-          // Send callback to backend and wait briefly for response
+          // Send callback to backend with timeout
+          // Use AbortController for timeout handling
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+          
+          console.log('Calling backend callback URL:', callbackUrl);
+          
           const response = await fetch(callbackUrl, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
             },
+            signal: controller.signal,
           });
 
+          clearTimeout(timeoutId);
+
           const result = await response.json().catch(() => ({}));
+          
+          console.log('Backend callback response:', { status: response.status, result });
           
           if (response.ok && result.success) {
             setStatus('success');
             setMessage('Payment confirmed. Closing window...');
           } else {
-            // Even if callback fails, close the tab - webhook will handle it
+            // Even if callback fails, show success - webhook will handle it
+            console.warn('Backend callback returned non-success, but proceeding (webhook will handle)');
             setStatus('success');
             setMessage('Payment processed. Closing window...');
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error('Callback error:', error);
-          // Still close even if callback fails - backend webhook will handle it
+          
+          // Handle timeout or network errors gracefully
+          if (error.name === 'AbortError') {
+            console.warn('Backend callback timed out, proceeding anyway (webhook will handle)');
+          } else if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+            console.warn('Network error calling backend, proceeding anyway (webhook will handle)');
+          }
+          
+          // Still show success and close - backend webhook will handle payment verification
           setStatus('success');
           setMessage('Payment processed. Closing window...');
         }
 
-        // Close the tab after a short delay
+        // Clear fallback timeout since we've processed
+        clearTimeout(fallbackTimeout);
+
+        // Close the tab after a short delay (increased to 2 seconds for better UX)
         setTimeout(() => {
-          window.close();
-        }, 1500);
+          try {
+            window.close();
+          } catch (closeError) {
+            // If window.close() fails (some browsers block it), redirect to a success page
+            console.log('Could not close window, redirecting to home');
+            window.location.href = '/';
+          }
+        }, 2000);
 
       } catch (error) {
         console.error('Payment callback processing error:', error);
-        setStatus('error');
-        setMessage('Error processing payment. Closing window...');
+        clearTimeout(fallbackTimeout);
+        // Even on error, show success message and close - webhook will handle verification
+        setStatus('success');
+        setMessage('Payment processed. Closing window...');
         setTimeout(() => {
-          window.close();
+          try {
+            window.close();
+          } catch (closeError) {
+            window.location.href = '/';
+          }
         }, 2000);
       }
     };
 
     processCallback();
+
+    // Cleanup function
+    return () => {
+      clearTimeout(fallbackTimeout);
+    };
   }, [searchParams]);
 
   return (

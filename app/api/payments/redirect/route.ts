@@ -99,14 +99,46 @@ export async function GET(request: NextRequest) {
     }
 
     // Clean the session ID
-    const cleanSessionId = String(finalPaymentSessionId).trim().replace(/[\s\r\n]+/g, '');
+    let cleanSessionId = String(finalPaymentSessionId).trim().replace(/[\s\r\n]+/g, '');
+
+    // Remove any "paymentpayment" suffix that might have been incorrectly appended
+    // This can happen if the session ID was extracted incorrectly from a URL
+    if (cleanSessionId.endsWith('paymentpayment')) {
+      cleanSessionId = cleanSessionId.replace(/paymentpayment$/, '');
+      console.warn('⚠️ Removed "paymentpayment" suffix from session ID');
+    }
+    
+    // Also check for any other common malformed endings
+    if (cleanSessionId.includes('paymentpayment')) {
+      // Extract only the valid session ID part (everything before "paymentpayment")
+      const sessionMatch = cleanSessionId.match(/^(session_[^p]+)/);
+      if (sessionMatch && sessionMatch[1]) {
+        cleanSessionId = sessionMatch[1];
+        console.warn('⚠️ Extracted valid session ID from malformed string');
+      }
+    }
 
     if (!cleanSessionId.startsWith('session_')) {
       console.error('❌ Invalid payment session ID format');
+      console.error('   Received:', cleanSessionId.substring(0, 100));
       return NextResponse.json(
         { 
           success: false, 
-          message: 'Invalid payment session ID format' 
+          message: 'Invalid payment session ID format',
+          details: 'Payment session ID must start with "session_"'
+        },
+        { status: 400 }
+      );
+    }
+    
+    // Validate session ID length (should be reasonable, not too short or too long)
+    if (cleanSessionId.length < 50 || cleanSessionId.length > 500) {
+      console.error('❌ Invalid payment session ID length:', cleanSessionId.length);
+      return NextResponse.json(
+        { 
+          success: false, 
+          message: 'Invalid payment session ID length',
+          details: `Session ID length ${cleanSessionId.length} is outside valid range (50-500 characters)`
         },
         { status: 400 }
       );
