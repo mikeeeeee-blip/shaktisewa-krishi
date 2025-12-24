@@ -7,7 +7,7 @@ import TopBar from '@/components/TopBar';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
-import { Mail, Lock, Eye, EyeOff, Shield, ArrowLeft, CheckCircle } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Shield, ArrowLeft, CheckCircle, X, Check } from 'lucide-react';
 import { forgotPassword, verifyOTP, resetPassword } from '@/lib/api/auth';
 
 type Step = 'email' | 'otp' | 'password' | 'success';
@@ -30,6 +30,65 @@ export default function ForgotPasswordPage() {
   
   // OTP input refs for better UX
   const [otpInputs, setOtpInputs] = useState<string[]>(['', '', '', '', '', '']);
+
+  // Password validation rules
+  const passwordRequirements = [
+    {
+      id: 'length',
+      label: 'At least 8 characters',
+      test: (pwd: string) => pwd.length >= 8 && pwd.length <= 128,
+    },
+    {
+      id: 'lowercase',
+      label: 'One lowercase letter',
+      test: (pwd: string) => /[a-z]/.test(pwd),
+    },
+    {
+      id: 'uppercase',
+      label: 'One uppercase letter',
+      test: (pwd: string) => /[A-Z]/.test(pwd),
+    },
+    {
+      id: 'number',
+      label: 'One number',
+      test: (pwd: string) => /\d/.test(pwd),
+    },
+    {
+      id: 'special',
+      label: 'One special character (!@#$%^&*...)',
+      test: (pwd: string) => /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd),
+    },
+    {
+      id: 'common',
+      label: 'Not a common password',
+      test: (pwd: string) => {
+        const commonPasswords = ['password', 'password123', '12345678', 'qwerty', 'abc123', 'letmein', 'welcome'];
+        return !commonPasswords.includes(pwd.toLowerCase());
+      },
+    },
+    {
+      id: 'repeated',
+      label: 'No repeated characters (e.g., aaaa)',
+      test: (pwd: string) => !/(.)\1{3,}/.test(pwd),
+    },
+  ];
+
+  // Check password strength
+  const getPasswordValidation = () => {
+    if (!password) {
+      return { allValid: false, requirements: [] };
+    }
+
+    const requirements = passwordRequirements.map(req => ({
+      ...req,
+      valid: req.test(password),
+    }));
+
+    const allValid = requirements.every(req => req.valid);
+    return { allValid, requirements };
+  };
+
+  const passwordValidation = getPasswordValidation();
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -134,8 +193,8 @@ export default function ForgotPasswordPage() {
     setSuccess(null);
 
     // Validation
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters long');
+    if (!passwordValidation.allValid) {
+      setError('Please meet all password requirements before continuing');
       setLoading(false);
       return;
     }
@@ -355,7 +414,13 @@ export default function ForgotPasswordPage() {
                         required
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="form-input pr-12"
+                        className={`form-input pr-12 ${
+                          password && !passwordValidation.allValid
+                            ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                            : password && passwordValidation.allValid
+                            ? 'border-green-300 focus:border-green-500 focus:ring-green-500'
+                            : ''
+                        }`}
                         placeholder="Enter your new password"
                         minLength={8}
                       />
@@ -368,9 +433,40 @@ export default function ForgotPasswordPage() {
                         {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                       </button>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Must be at least 8 characters long
-                    </p>
+
+                    {/* Password Requirements */}
+                    {password && (
+                      <div className="mt-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <p className="text-sm font-semibold text-gray-700 mb-3">Password Requirements:</p>
+                        <ul className="space-y-2">
+                          {passwordValidation.requirements.map((req) => (
+                            <li
+                              key={req.id}
+                              className={`flex items-center gap-2 text-sm transition-colors ${
+                                req.valid ? 'text-green-700' : 'text-gray-600'
+                              }`}
+                            >
+                              {req.valid ? (
+                                <Check className="w-4 h-4 text-green-600 flex-shrink-0" />
+                              ) : (
+                                <X className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              )}
+                              <span className={req.valid ? 'line-through text-gray-500' : ''}>
+                                {req.label}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                        {passwordValidation.allValid && (
+                          <div className="mt-3 pt-3 border-t border-green-200">
+                            <p className="text-sm text-green-700 font-semibold flex items-center gap-2">
+                              <CheckCircle className="w-4 h-4" />
+                              Password meets all requirements
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="form-group">
@@ -385,7 +481,13 @@ export default function ForgotPasswordPage() {
                         required
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="form-input pr-12"
+                        className={`form-input pr-12 ${
+                          confirmPassword && password !== confirmPassword
+                            ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
+                            : confirmPassword && password === confirmPassword
+                            ? 'border-green-300 focus:border-green-500 focus:ring-green-500'
+                            : ''
+                        }`}
                         placeholder="Confirm your new password"
                         minLength={8}
                       />
@@ -398,6 +500,21 @@ export default function ForgotPasswordPage() {
                         {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                       </button>
                     </div>
+                    {confirmPassword && (
+                      <div className="mt-2">
+                        {password === confirmPassword ? (
+                          <p className="text-xs text-green-600 flex items-center gap-1">
+                            <Check className="w-3 h-3" />
+                            Passwords match
+                          </p>
+                        ) : (
+                          <p className="text-xs text-red-600 flex items-center gap-1">
+                            <X className="w-3 h-3" />
+                            Passwords do not match
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex gap-3">
@@ -417,8 +534,8 @@ export default function ForgotPasswordPage() {
                     </button>
                     <button
                       type="submit"
-                      disabled={loading}
-                      className="form-button flex-1"
+                      disabled={loading || !passwordValidation.allValid || password !== confirmPassword}
+                      className="form-button flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {loading ? (
                         <>
