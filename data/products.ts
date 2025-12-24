@@ -1356,7 +1356,7 @@ export const productData = {
   },
   "13": {
     "id": "13",
-    "name": "Exylon Orion Oxyfluorfen 23.5% EC Herbicide, Broad-Spectrum, Control Weeds In Major Crops",
+    "name": " Orion Oxyfluorfen 23.5% EC Herbicide, Broad-Spectrum, Control Weeds In Major Crops",
     "brand": "KRISHI RASAYAN",
     "rating": null,
     "reviews": 13060,
@@ -1552,7 +1552,7 @@ export const productData = {
         "isBestSeller": null
       }
     ],
-    "description": "Orion (Oxyflourfen 23.5% EC W/W) is a powerful selective herbicide produced by Exylon, designed to provide effective control over a wide spectrum of weeds in various crops. With its high concentration of Oxyflourfen, Orion offers excellent pre-emergence and post-emergence weed control, ensuring healthier crops by minimizing weed competition.",
+    "description": "Orion (Oxyflourfen 23.5% EC W/W) is a powerful selective herbicide produced by , designed to provide effective control over a wide spectrum of weeds in various crops. With its high concentration of Oxyflourfen, Orion offers excellent pre-emergence and post-emergence weed control, ensuring healthier crops by minimizing weed competition.",
     "technicalComposition": "Oxyflourfen 23.5% EC W/W",
     "keyFeatures": [
       {
@@ -1603,7 +1603,7 @@ export const productData = {
   },
   "14": {
     "id": "14",
-    "name": "Exylon Venus Validamycin 3% L Fungicide, Broad-Spectrum, Fungal And Bacterial Diseases Controls In Crops",
+    "name": " Venus Validamycin 3% L Fungicide, Broad-Spectrum, Fungal And Bacterial Diseases Controls In Crops",
     "brand": "Safex Chemicals (India) Limited",
     "rating": null,
     "reviews": 13059,
@@ -1771,7 +1771,7 @@ export const productData = {
         "isBestSeller": null
       }
     ],
-    "description": "Venus (Validamycin 3% L) is a highly effective fungicide produced by Exylon, specifically designed to control bacterial and fungal diseases. With its high concentration of Validamycin, Venus provides reliable protection for crops, ensuring improved health and higher yield potential by managing a variety of plant pathogens.",
+    "description": "Venus (Validamycin 3% L) is a highly effective fungicide produced by , specifically designed to control bacterial and fungal diseases. With its high concentration of Validamycin, Venus provides reliable protection for crops, ensuring improved health and higher yield potential by managing a variety of plant pathogens.",
     "technicalComposition": "Validamycin 3% L",
     "keyFeatures": [
       {
@@ -1809,7 +1809,7 @@ export const productData = {
   },
   "15": {
     "id": "15",
-    "name": "Exylon Aztec Azoxystrobin 11% + Tebuconazole 18.3% SC Fungicide, Broad-Spectrum, Dual Action Fungal Diseases Control In Crops",
+    "name": " Aztec Azoxystrobin 11% + Tebuconazole 18.3% SC Fungicide, Broad-Spectrum, Dual Action Fungal Diseases Control In Crops",
     "brand": "Parijat Industries (India) Private Limited",
     "rating": 5,
     "reviews": 13058,
@@ -1977,7 +1977,7 @@ export const productData = {
         "isBestSeller": null
       }
     ],
-    "description": "Aztec (Azoxystrobin 11% + Tebuconazole 18.3% W/W SC) is a highly advanced fungicide produced by Exylon, offering dual-action protection against fungal diseases. With its combination of Azoxystrobin and Tebuconazole, Aztec ensures superior disease control, promotes healthy plant growth, and enhances yield potential.",
+    "description": "Aztec (Azoxystrobin 11% + Tebuconazole 18.3% W/W SC) is a highly advanced fungicide produced by , offering dual-action protection against fungal diseases. With its combination of Azoxystrobin and Tebuconazole, Aztec ensures superior disease control, promotes healthy plant growth, and enhances yield potential.",
     "technicalComposition": "Azoxystrobin 11% + Tebuconazole 18.3% W/W SC",
     "keyFeatures": [
       {
@@ -2035,7 +2035,7 @@ export const productData = {
   },
   "16": {
     "id": "16",
-    "name": "Exylon Thiazol Thiamethoxam 30% FS Insecticide, Efficient Seed Treatment For Early Pest Control",
+    "name": " Thiazol Thiamethoxam 30% FS Insecticide, Efficient Seed Treatment For Early Pest Control",
     "brand": "Shriram Farm Solutions",
     "rating": null,
     "reviews": 13057,
@@ -2203,7 +2203,7 @@ export const productData = {
         "isBestSeller": null
       }
     ],
-    "description": "Thiazol (Thiamethoxam 30% FS) is a highly effective seed treatment insecticide produced by Exylon. It protects crops from early-stage pests by safeguarding seeds and seedlings, ensuring healthy plant growth and optimal yield potential. Thiazol is specially designed to provide long-lasting protection right from germination.",
+    "description": "Thiazol (Thiamethoxam 30% FS) is a highly effective seed treatment insecticide produced by . It protects crops from early-stage pests by safeguarding seeds and seedlings, ensuring healthy plant growth and optimal yield potential. Thiazol is specially designed to provide long-lasting protection right from germination.",
     "technicalComposition": "Thiamethoxam 30% FS",
     "keyFeatures": [
       {
@@ -2247,7 +2247,7 @@ export const productData = {
   },
   "17": {
     "id": "17",
-    "name": "Exylon Thiapower Thiamethoxam 25% WG Insecticide, Effective Sucking Pest Control In Crops",
+    "name": " Thiapower Thiamethoxam 25% WG Insecticide, Effective Sucking Pest Control In Crops",
     "brand": "Godrej Agrovet Limited",
     "rating": null,
     "reviews": 13056,
@@ -2429,7 +2429,7 @@ export const productData = {
         "isBestSeller": null
       }
     ],
-    "description": "Thiapower (Thiamethoxam 25% WG) is a powerful systemic insecticide produced by Exylon. It offers effective and long-lasting control against a wide range of sucking pests, ensuring healthier crops and improved yields. With its water-dispersible granule formulation, Thiapower provides convenience and superior pest control.",
+    "description": "Thiapower (Thiamethoxam 25% WG) is a powerful systemic insecticide produced by . It offers effective and long-lasting control against a wide range of sucking pests, ensuring healthier crops and improved yields. With its water-dispersible granule formulation, Thiapower provides convenience and superior pest control.",
     "technicalComposition": "Thiamethoxam 25% WG",
     "keyFeatures": [
       {
@@ -2476,7 +2476,7 @@ export const productData = {
   },
   "18": {
     "id": "18",
-    "name": "Exylon Lumina Thiamethoxam 12.6% + Lambda-Cyhalothrin 9.5% ZC Insecticide, Powerful Dual-Action Pest Control",
+    "name": " Lumina Thiamethoxam 12.6% + Lambda-Cyhalothrin 9.5% ZC Insecticide, Powerful Dual-Action Pest Control",
     "brand": "R K Chemicals",
     "rating": 4,
     "reviews": 13055,
@@ -2644,7 +2644,7 @@ export const productData = {
         "isBestSeller": null
       }
     ],
-    "description": "Lumina (Thiamethoxam 12.6% + Lambda-Cyhalothrin 9.5% ZC) is a highly effective combination insecticide produced by Exylon. The dual-action formula combines the systemic activity of Thiamethoxam with the rapid knockdown effect of Lambda-Cyhalothrin, providing superior control over a wide range of pests and ensuring healthier crops and higher yields.",
+    "description": "Lumina (Thiamethoxam 12.6% + Lambda-Cyhalothrin 9.5% ZC) is a highly effective combination insecticide produced by . The dual-action formula combines the systemic activity of Thiamethoxam with the rapid knockdown effect of Lambda-Cyhalothrin, providing superior control over a wide range of pests and ensuring healthier crops and higher yields.",
     "technicalComposition": "Thiamethoxam 12.6% + Lambda-Cyhalothrin 9.5% ZC",
     "keyFeatures": [
       {
@@ -10700,7 +10700,7 @@ export const productData = {
   },
   "71": {
     "id": "71",
-    "name": "Exylon Matazeb Metalaxyl 8% + Mancozeb 64% WP Fungicide, Dual Action Mode, Control Fungal Diseases In Various Crops",
+    "name": " Matazeb Metalaxyl 8% + Mancozeb 64% WP Fungicide, Dual Action Mode, Control Fungal Diseases In Various Crops",
     "brand": "Essential Biosciences",
     "rating": null,
     "reviews": 13061,
@@ -10854,7 +10854,7 @@ export const productData = {
         "isBestSeller": null
       }
     ],
-    "description": "Exylon Matazeb Fungicide is a powerful combination of Metalaxyl 8% (systemic) and Mancozeb 64% (contact) in WP formulation. It offers dual-action protection against a wide range of fungal diseases, especially downy mildew, late blight, damping off, and other soil- and seed-borne pathogens. Matazeb ensures effective disease management, healthier crop growth, and improved yield. Suitable for fruits, vegetables, cereals, pulses, and plantation crops.",
+    "description": " Matazeb Fungicide is a powerful combination of Metalaxyl 8% (systemic) and Mancozeb 64% (contact) in WP formulation. It offers dual-action protection against a wide range of fungal diseases, especially downy mildew, late blight, damping off, and other soil- and seed-borne pathogens. Matazeb ensures effective disease management, healthier crop growth, and improved yield. Suitable for fruits, vegetables, cereals, pulses, and plantation crops.",
     "technicalComposition": "Metalaxyl 8% + Mancozeb 64% WP",
     "keyFeatures": [
       {
@@ -10903,7 +10903,7 @@ export const productData = {
   },
   "72": {
     "id": "72",
-    "name": "Exylon Novamax Novaluron 5.25% + Emamectin Benzoate 0.9% SC Insecticide, Dual-Action Pest Control Solution",
+    "name": " Novamax Novaluron 5.25% + Emamectin Benzoate 0.9% SC Insecticide, Dual-Action Pest Control Solution",
     "brand": "JU AGRI SCIENCE PVT LTD",
     "rating": null,
     "reviews": 13054,
@@ -11071,7 +11071,7 @@ export const productData = {
         "isBestSeller": null
       }
     ],
-    "description": "Exylon Novamax combines Novaluron, a benzoylurea compound, and Emamectin Benzoate, an avermectin derivative, into a powerful SC (Suspension Concentrate) formulation. This dual-mode insecticide ensures immediate action and long residual control against lepidopteran pests, effectively protecting crops from critical yield losses.",
+    "description": " Novamax combines Novaluron, a benzoylurea compound, and Emamectin Benzoate, an avermectin derivative, into a powerful SC (Suspension Concentrate) formulation. This dual-mode insecticide ensures immediate action and long residual control against lepidopteran pests, effectively protecting crops from critical yield losses.",
     "technicalComposition": "Novaluron 5.25% + Emamectin benzoate 0.9% SC",
     "keyFeatures": [
       {
@@ -11080,13 +11080,13 @@ export const productData = {
       }
     ],
     "dosage": {
-      "spraying": "Dual-Action Control: Exylon Novamax offers a comprehensive approach, targeting both young and adult stages of pests.Broad-Spectrum Efficacy: It controls a wide range of pests, making it a versatile choice for pest management.Residual Activity: It provides long-lasting residual activity, reducing the cost of pest management.Crop Safety: The insecticide is designed to be gentle on crops, ensuring minimal phytotoxicity when used as directed.Exylon Novamax Insecticide has low PHI, thus safe for vegetables.",
+      "spraying": "Dual-Action Control:  Novamax offers a comprehensive approach, targeting both young and adult stages of pests.Broad-Spectrum Efficacy: It controls a wide range of pests, making it a versatile choice for pest management.Residual Activity: It provides long-lasting residual activity, reducing the cost of pest management.Crop Safety: The insecticide is designed to be gentle on crops, ensuring minimal phytotoxicity when used as directed. Novamax Insecticide has low PHI, thus safe for vegetables.",
       "sugarcane": null,
       "soilApplication": null
     },
     "suitableCrops": "Foliar Spray (Spray to be initiated when pest population reaches economic threshold level (ETL). i.e. 1-2 larvae/ plant)",
     "safetyTips": [
-      "Exylon Novamax Insecticide can be applied in various agricultural settings:Cotton Fields: Control damaging pests like bollworms",
+      " Novamax Insecticide can be applied in various agricultural settings:Cotton Fields: Control damaging pests like bollworms",
       "aphids for healthier cotton crops.Vegetable Crops: Safeguard vegetables from a variety of pests",
       "ensuring high-quality yields.Fruit Orchards: Protect fruit trees from harmful insects",
       "promoting healthy fruit production."
@@ -11176,7 +11176,7 @@ export const productData = {
   },
   "74": {
     "id": "74",
-    "name": "Exylon Exymax Imidacloprid 30.5% SC Insecticide, Effective For Sucking Pests Control",
+    "name": " Exymax Imidacloprid 30.5% SC Insecticide, Effective For Sucking Pests Control",
     "brand": "HPM Chemicals and Fertilizers Ltd.",
     "rating": null,
     "reviews": 13048,
@@ -11344,7 +11344,7 @@ export const productData = {
         "isBestSeller": null
       }
     ],
-    "description": "Exymax (Imidacloprid 30.5% SC) is a highly effective systemic insecticide produced by Exylon. Imidacloprid, the active ingredient, provides superior control over a wide range of pests, including both sucking and chewing insects. Exymax is ideal for use in a variety of crops, ensuring healthier plants and enhanced yields.",
+    "description": "Exymax (Imidacloprid 30.5% SC) is a highly effective systemic insecticide produced by . Imidacloprid, the active ingredient, provides superior control over a wide range of pests, including both sucking and chewing insects. Exymax is ideal for use in a variety of crops, ensuring healthier plants and enhanced yields.",
     "technicalComposition": "Imidacloprid 30.5% SC",
     "keyFeatures": [
       {
@@ -11388,7 +11388,7 @@ export const productData = {
   },
   "75": {
     "id": "75",
-    "name": "Exylon Exymida Imidacloprid 17.8% SL Insecticide, Efficient For Sucking Pests Control Solution In Crops",
+    "name": " Exymida Imidacloprid 17.8% SL Insecticide, Efficient For Sucking Pests Control Solution In Crops",
     "brand": "Shriram Farm Solutions",
     "rating": null,
     "reviews": 13047,
@@ -11556,7 +11556,7 @@ export const productData = {
         "isBestSeller": null
       }
     ],
-    "description": "Exymida (Imidacloprid 17.8% SL) is a highly effective systemic insecticide produced by Exylon. Imidacloprid, the active ingredient, provides superior control over a wide range of pests, including both sucking and chewing insects. Exymida is ideal for use in a variety of crops, ensuring healthier plants and enhanced yields.",
+    "description": "Exymida (Imidacloprid 17.8% SL) is a highly effective systemic insecticide produced by . Imidacloprid, the active ingredient, provides superior control over a wide range of pests, including both sucking and chewing insects. Exymida is ideal for use in a variety of crops, ensuring healthier plants and enhanced yields.",
     "technicalComposition": "Imidacloprid 17.8% SL",
     "keyFeatures": [
       {
@@ -11602,7 +11602,7 @@ export const productData = {
   },
   "76": {
     "id": "76",
-    "name": "Exylon Aether Azoxystrobin 18.2% + Difenoconazole 11.4% SC Fungicide, Dual-Action, Disease Control In Crops",
+    "name": " Aether Azoxystrobin 18.2% + Difenoconazole 11.4% SC Fungicide, Dual-Action, Disease Control In Crops",
     "brand": "T.Stanes and Company Limited",
     "rating": null,
     "reviews": 13045,
@@ -11728,7 +11728,7 @@ export const productData = {
         "isBestSeller": null
       }
     ],
-    "description": "Aether (Azoxystrobin 18.2% + Difenoconazole 11.4% SC) is a premium fungicide produced by Exylon, offering dual-action protection against a broad spectrum of fungal diseases. Its combination of Azoxystrobin and Difenoconazole ensures preventive and curative control while promoting healthier crops and higher yields.",
+    "description": "Aether (Azoxystrobin 18.2% + Difenoconazole 11.4% SC) is a premium fungicide produced by , offering dual-action protection against a broad spectrum of fungal diseases. Its combination of Azoxystrobin and Difenoconazole ensures preventive and curative control while promoting healthier crops and higher yields.",
     "technicalComposition": "Azoxystrobin 18.2% + Difenoconazole 11.4% SC",
     "keyFeatures": [
       {
@@ -11786,7 +11786,7 @@ export const productData = {
   },
   "77": {
     "id": "77",
-    "name": "Exylon Burst 24 Paraquat Dichloride 24% SL Herbicide, Non-Selective, Fast Weed Control In Crops",
+    "name": " Burst 24 Paraquat Dichloride 24% SL Herbicide, Non-Selective, Fast Weed Control In Crops",
     "brand": "Nathsagar Bio-Genetics Pvt Ltd",
     "rating": null,
     "reviews": 13043,
@@ -11898,7 +11898,7 @@ export const productData = {
         "isBestSeller": null
       }
     ],
-    "description": "Burst 24 (Paraquat Dichloride 24% SL) is a fast-acting non-selective herbicide produced by Exylon, designed to control a wide variety of weeds. With its high concentration of Paraquat Dichloride, Burst 24 provides effective weed control, especially for desiccating weeds and controlling vegetation in non-crop areas.",
+    "description": "Burst 24 (Paraquat Dichloride 24% SL) is a fast-acting non-selective herbicide produced by , designed to control a wide variety of weeds. With its high concentration of Paraquat Dichloride, Burst 24 provides effective weed control, especially for desiccating weeds and controlling vegetation in non-crop areas.",
     "technicalComposition": "Paraquat Dichloride 24% SL",
     "keyFeatures": [
       {
@@ -11936,7 +11936,7 @@ export const productData = {
   },
   "78": {
     "id": "78",
-    "name": "Exylon Garud 41 Glyphosate 41% SL Herbicide, Effective For Control Weed In Crops",
+    "name": " Garud 41 Glyphosate 41% SL Herbicide, Effective For Control Weed In Crops",
     "brand": "Crystal Crop Protection Ltd.",
     "rating": null,
     "reviews": 13042,
@@ -12048,7 +12048,7 @@ export const productData = {
         "isBestSeller": null
       }
     ],
-    "description": "Garud 41 (Glyphosate 41% SL) is a powerful, non-selective herbicide produced by Exylon, formulated to control a wide range of both annual and perennial weeds. With its high concentration of Glyphosate, Garud 41 ensures effective and long-lasting weed management, promoting healthy crop growth by reducing weed competition.",
+    "description": "Garud 41 (Glyphosate 41% SL) is a powerful, non-selective herbicide produced by , formulated to control a wide range of both annual and perennial weeds. With its high concentration of Glyphosate, Garud 41 ensures effective and long-lasting weed management, promoting healthy crop growth by reducing weed competition.",
     "technicalComposition": "Glyphosate 41% SL",
     "keyFeatures": [
       {

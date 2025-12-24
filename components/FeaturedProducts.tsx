@@ -5,12 +5,12 @@ import { productData } from '@/data/products';
 
 export default function FeaturedProducts() {
   // Filter featured products - match shaktisewa.com Featured Products section
-  // These are primarily Exylon products (Crop Protection) and other high-quality products
+  // These are primarily  products (Crop Protection) and other high-quality products
   const featuredProducts = Object.values(productData)
     .filter((product) => {
       const name = product.name.toLowerCase();
-      // Include Exylon products (from shaktisewa.com Featured Products)
-      if (name.includes('exylon')) return true;
+      // Include  products (from shaktisewa.com Featured Products)
+      if (name.includes('')) return true;
       // Include Perfect Crop Dekkan Charger Plus
       if (name.includes('perfect crop') && name.includes('dekkan')) return true;
       // Include other high-quality products
@@ -20,11 +20,11 @@ export default function FeaturedProducts() {
       return false;
     })
     .sort((a, b) => {
-      // Prioritize Exylon products first
-      const aIsExylon = a.name.toLowerCase().includes('exylon');
-      const bIsExylon = b.name.toLowerCase().includes('exylon');
-      if (aIsExylon && !bIsExylon) return -1;
-      if (!aIsExylon && bIsExylon) return 1;
+      // Prioritize  products first
+      const aIs = a.name.toLowerCase().includes('');
+      const bIs = b.name.toLowerCase().includes('');
+      if (aIs && !bIs) return -1;
+      if (!aIs && bIs) return 1;
       return 0;
     })
     .slice(0, 12); // Show first 12 featured products

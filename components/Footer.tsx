@@ -542,7 +542,7 @@ const Footer = () => {
             <div>
               <h3 className="font-bold mb-2">Insecticides :</h3>
               <p className="text-gray-100">
-                Exylon Thiazol Thiamethoxam 30% FS Insecticide, Efficient Seed Treatment For Early Pest Control / Katyayani Docter Thiamethoxam 30% FS Insecticide, For Systemic Seed Treatment / Mahindra Summit Attila Gold Thiamethoxam 30% FS Insecticide, Use For Seed Treatment and Sucking Pests / United Chemical Unitara FS Thiamethoxam 30% FS Insecticide, Systemic Insecticide / EBS Thiomaster Thiamethoxam 30% FS, Control Of A Wide Range Of Early Season Sucking And Chewing, Leaf-Feeding And Soil Dwelling Insect Pests
+                 Thiazol Thiamethoxam 30% FS Insecticide, Efficient Seed Treatment For Early Pest Control / Katyayani Docter Thiamethoxam 30% FS Insecticide, For Systemic Seed Treatment / Mahindra Summit Attila Gold Thiamethoxam 30% FS Insecticide, Use For Seed Treatment and Sucking Pests / United Chemical Unitara FS Thiamethoxam 30% FS Insecticide, Systemic Insecticide / EBS Thiomaster Thiamethoxam 30% FS, Control Of A Wide Range Of Early Season Sucking And Chewing, Leaf-Feeding And Soil Dwelling Insect Pests
               </p>
             </div>
 
