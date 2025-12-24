@@ -105,4 +105,58 @@ export const getProfile = async (): Promise<ApiResponse<any>> => {
   return response.data;
 };
 
+// Forgot password - Request OTP
+export const forgotPassword = async (email: string): Promise<ApiResponse> => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/auth/forgot-password`, { email });
+    return response.data;
+  } catch (error: any) {
+    if (error.response) {
+      const apiError = new Error(error.response.data?.message || 'Failed to send OTP');
+      (apiError as any).response = error.response;
+      throw apiError;
+    } else if (error.request) {
+      throw new Error('Network error. Please check your connection.');
+    } else {
+      throw error;
+    }
+  }
+};
+
+// Verify OTP
+export const verifyOTP = async (email: string, otp: string): Promise<ApiResponse> => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/auth/verify-otp`, { email, otp });
+    return response.data;
+  } catch (error: any) {
+    if (error.response) {
+      const apiError = new Error(error.response.data?.message || 'Invalid OTP');
+      (apiError as any).response = error.response;
+      throw apiError;
+    } else if (error.request) {
+      throw new Error('Network error. Please check your connection.');
+    } else {
+      throw error;
+    }
+  }
+};
+
+// Reset password with OTP
+export const resetPassword = async (email: string, otp: string, password: string): Promise<ApiResponse> => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/auth/reset-password`, { email, otp, password });
+    return response.data;
+  } catch (error: any) {
+    if (error.response) {
+      const apiError = new Error(error.response.data?.message || 'Failed to reset password');
+      (apiError as any).response = error.response;
+      throw apiError;
+    } else if (error.request) {
+      throw new Error('Network error. Please check your connection.');
+    } else {
+      throw error;
+    }
+  }
+};
+
 
