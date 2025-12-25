@@ -10,7 +10,7 @@ function CheckoutContent() {
   const [paymentSessionId, setPaymentSessionId] = useState<string | null>(null);
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('sandbox');
 
-  // Remove title and favicon on mount
+  // Set white background and load Cashfree SDK on mount
   useEffect(() => {
     // Clear document title
     document.title = '';
@@ -27,17 +27,26 @@ function CheckoutContent() {
       existingAppleIcon.remove();
     }
     
-    // Set body and html background to black
-    document.body.style.backgroundColor = '#000000';
+    // Set body and html background to white
+    document.body.style.backgroundColor = '#ffffff';
     document.body.style.margin = '0';
     document.body.style.padding = '0';
-    document.documentElement.style.backgroundColor = '#000000';
+    document.documentElement.style.backgroundColor = '#ffffff';
     document.documentElement.style.margin = '0';
     document.documentElement.style.padding = '0';
     
     // Remove any overflow
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
+
+    // Preload Cashfree SDK for faster loading
+    if (typeof window !== 'undefined' && !(window as any).Cashfree) {
+      const script = document.createElement('script');
+      script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+      script.async = true;
+      script.defer = true;
+      document.head.appendChild(script);
+    }
   }, []);
 
   // Payment data from URL parameters
@@ -97,13 +106,18 @@ function CheckoutContent() {
         setLoading(true);
         console.log('Creating Cashfree payment session with data:', paymentData);
 
-        // Call Next.js API route to create Cashfree session
-        const response = await fetch('/api/payments/create-session', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
+        // Call Next.js API route to create Cashfree session with timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+        try {
+          const response = await fetch('/api/payments/create-session', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            signal: controller.signal,
+            body: JSON.stringify({
             orderId: paymentData.order_id,
             orderAmount: paymentData.amount,
             transactionId: paymentData.transaction_id, // Include transaction_id for callback
@@ -135,6 +149,7 @@ function CheckoutContent() {
           }),
         });
 
+        clearTimeout(timeoutId);
         const result = await response.json();
         
         console.log('API Response:', JSON.stringify(result, null, 2));
@@ -197,11 +212,18 @@ function CheckoutContent() {
           setEnvironment(apiEnvironment);
         }
         setLoading(false);
-      } catch (err: any) {
-        console.error('Error creating payment session:', err);
-        setError(`Failed to create payment session: ${err.message || 'Unknown error'}`);
-        setLoading(false);
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Request timeout. Please try again.');
+        }
+        throw fetchError;
       }
+    } catch (err: any) {
+      console.error('Error creating payment session:', err);
+      setError(`Failed to create payment session: ${err.message || 'Unknown error'}`);
+      setLoading(false);
+    }
     };
 
     createCashfreeSession();
@@ -285,10 +307,10 @@ function CheckoutContent() {
           setError(`Failed to initialize payment: ${error.message || 'Unknown error'}`);
         }
       } else {
-        // SDK not loaded yet, wait and retry
+        // SDK not loaded yet, wait and retry (reduced since SDK is preloaded in layout)
         console.log('Cashfree SDK not loaded yet, waiting...');
         let retryCount = 0;
-        const maxRetries = 20; // 10 seconds total (20 * 500ms)
+        const maxRetries = 15; // 3 seconds total (15 * 200ms) - reduced since SDK is preloaded
 
         checkSDKInterval = setInterval(() => {
           retryCount++;
@@ -299,14 +321,14 @@ function CheckoutContent() {
             if (checkSDKInterval) clearInterval(checkSDKInterval);
             setError('Cashfree payment SDK failed to load. Please refresh the page and try again.');
           }
-        }, 500);
+        }, 200); // Reduced from 500ms to 200ms for faster checking
       }
     };
 
-    // Wait a bit for SDK to load
+    // Wait a bit for SDK to load (reduced from 500ms to 200ms for faster loading)
     timeoutId = setTimeout(() => {
       initializeCashfreeCheckout();
-    }, 500);
+    }, 200);
 
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
@@ -314,7 +336,7 @@ function CheckoutContent() {
     };
   }, [paymentSessionId, environment]);
 
-  // Always return black screen - no UI elements
+  // Show Cashfree logo on white background while loading
   return (
     <div style={{ 
       position: 'fixed', 
@@ -322,11 +344,65 @@ function CheckoutContent() {
       left: 0, 
       width: '100%', 
       height: '100%', 
-      backgroundColor: '#000000',
+      backgroundColor: '#ffffff',
       margin: 0,
       padding: 0,
-      zIndex: 9999
-    }} />
+      zIndex: 9999,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'column',
+      gap: '20px'
+    }}>
+      <img 
+        src="/cashfree-logo.png" 
+        alt="Cashfree Payments" 
+        style={{
+          maxWidth: '300px',
+          width: '80%',
+          height: 'auto',
+          objectFit: 'contain'
+        }}
+      />
+      {loading && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          color: '#666',
+          fontSize: '14px',
+          fontFamily: 'system-ui, -apple-system, sans-serif'
+        }}>
+          <div style={{
+            width: '16px',
+            height: '16px',
+            border: '2px solid #f3f3f3',
+            borderTop: '2px solid #0070f3',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite'
+          }} />
+          <span>Loading payment gateway...</span>
+        </div>
+      )}
+      {error && (
+        <div style={{
+          color: '#d32f2f',
+          fontSize: '14px',
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+          textAlign: 'center',
+          padding: '0 20px',
+          maxWidth: '500px'
+        }}>
+          {error}
+        </div>
+      )}
+      <style jsx>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
   );
 }
 
@@ -339,11 +415,25 @@ export default function CheckoutPage() {
         left: 0, 
         width: '100%', 
         height: '100%', 
-        backgroundColor: '#000000',
+        backgroundColor: '#ffffff',
         margin: 0,
         padding: 0,
-        zIndex: 9999
-      }} />
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <img 
+          src="/cashfree-logo.png" 
+          alt="Cashfree Payments" 
+          style={{
+            maxWidth: '300px',
+            width: '80%',
+            height: 'auto',
+            objectFit: 'contain'
+          }}
+        />
+      </div>
     }>
       <CheckoutContent />
     </Suspense>
