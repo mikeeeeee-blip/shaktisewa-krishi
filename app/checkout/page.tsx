@@ -358,9 +358,8 @@ function CheckoutContent() {
         src="/cashfree-logo.png" 
         alt="Cashfree Payments" 
         style={{
-          maxWidth: '300px',
-          width: '80%',
-          height: 'auto',
+          width: '100px',
+          height: '50px',
           objectFit: 'contain'
         }}
       />
@@ -427,9 +426,8 @@ export default function CheckoutPage() {
           src="/cashfree-logo.png" 
           alt="Cashfree Payments" 
           style={{
-            maxWidth: '300px',
-            width: '80%',
-            height: 'auto',
+            width: '100px',
+            height: '50px',
             objectFit: 'contain'
           }}
         />
