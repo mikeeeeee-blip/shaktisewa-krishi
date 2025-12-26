@@ -27,20 +27,43 @@ const getCashfreeApiUrl = () => {
 const CASHFREE_API_URL = getCashfreeApiUrl();
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  console.log('\n' + '='.repeat(80));
+  console.log('🚀 NEXT.JS API: Create Cashfree Payment Session');
+  console.log('='.repeat(80));
+  console.log('   Timestamp:', new Date().toISOString());
+  console.log('   Environment:', CASHFREE_ENV);
+  console.log('   API Base URL:', CASHFREE_API_URL);
+  
   try {
     const body = await request.json();
+    console.log('   Request Body:', JSON.stringify(body, null, 2));
     const { orderId, orderAmount, customerDetails, shippingAddress, items, billingAddress, transactionId } = body;
 
     // Validate required fields
     if (!orderId || !orderAmount || !customerDetails) {
+      console.log('   ❌ Validation Failed: Missing required fields');
+      console.log('   Missing:', {
+        orderId: !orderId,
+        orderAmount: !orderAmount,
+        customerDetails: !customerDetails
+      });
       return NextResponse.json(
         { success: false, message: 'Missing required fields' },
         { status: 400 }
       );
     }
+    
+    console.log('   ✅ Validation Passed');
 
     // Validate credentials are configured
     if (!CASHFREE_APP_ID || !CASHFREE_SECRET_KEY) {
+      console.error('❌ Cashfree credentials missing:', {
+        hasAppId: !!CASHFREE_APP_ID,
+        hasSecretKey: !!CASHFREE_SECRET_KEY,
+        env: CASHFREE_ENV,
+        expectedTestCredentials: CASHFREE_ENV === 'SANDBOX',
+      });
       return NextResponse.json(
         { 
           success: false, 
@@ -52,6 +75,29 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Validate sandbox credentials format when in SANDBOX mode
+    if (CASHFREE_ENV === 'SANDBOX') {
+      const isTestAppId = CASHFREE_APP_ID?.startsWith('TEST') || CASHFREE_APP_ID?.includes('test');
+      const isTestSecretKey = CASHFREE_SECRET_KEY?.includes('_test_') || CASHFREE_SECRET_KEY?.includes('test');
+      
+      if (!isTestAppId || !isTestSecretKey) {
+        console.warn('⚠️ Warning: CASHFREE_ENV is SANDBOX but credentials may not be sandbox credentials');
+        console.warn('   App ID starts with TEST:', isTestAppId);
+        console.warn('   Secret Key contains "_test_":', isTestSecretKey);
+        console.warn('   This may cause authentication errors with Cashfree sandbox API');
+      } else {
+        console.log('✅ Sandbox credentials validated - using test credentials');
+      }
+    }
+
+    console.log('✅ Cashfree credentials configured:', {
+      env: CASHFREE_ENV,
+      hasAppId: !!CASHFREE_APP_ID,
+      hasSecretKey: !!CASHFREE_SECRET_KEY,
+      appIdPrefix: CASHFREE_APP_ID?.substring(0, 10) + '...',
+      secretKeyPrefix: CASHFREE_SECRET_KEY?.substring(0, 10) + '...',
+    });
 
     // Get the base URL for redirect
     // Cashfree REQUIRES publicly accessible HTTPS URLs for return_url (even in sandbox)
@@ -104,8 +150,10 @@ export async function POST(request: NextRequest) {
     // Ensure origin is HTTPS (Cashfree requires HTTPS)
     if (origin && origin.startsWith('http://') && !origin.includes('localhost')) {
       origin = origin.replace('http://', 'https://');
+      console.log('Converted to HTTPS:', origin);
     } else if (origin && !origin.startsWith('https://') && !origin.includes('localhost')) {
       origin = `https://${origin}`;
+      console.log('Added HTTPS protocol:', origin);
     }
     
     // Prepare order data for Cashfree according to latest API (v2025-01-01)
@@ -132,8 +180,13 @@ export async function POST(request: NextRequest) {
     // For PRODUCTION mode, require public HTTPS URL
     if (!origin || origin.includes('localhost')) {
       if (CASHFREE_ENV === 'SANDBOX') {
+        // In sandbox, use default production URL as fallback (works for testing)
         origin = 'https://www.shaktisewafoudation.in';
+        console.log('⚠️ Using localhost detected in SANDBOX mode, falling back to default production URL:', origin);
+        console.log('   Note: For local testing with sandbox, consider using ngrok or set NGROK_URL in .env');
       } else {
+        // In production mode, require public HTTPS URL
+        console.error('❌ Cannot use localhost as return_url in PRODUCTION mode. Cashfree requires publicly accessible HTTPS URL.');
         return NextResponse.json(
           {
             success: false,
@@ -141,6 +194,7 @@ export async function POST(request: NextRequest) {
             details: {
               error: 'client session is invalid',
               solution: 'Set NEXT_PUBLIC_WEBSITE_URL=https://www.shaktisewafoudation.in in .env, or use NGROK_URL for local testing',
+              note: 'Cashfree requires a publicly accessible HTTPS return_url. Set NEXT_PUBLIC_WEBSITE_URL to your production website URL.',
             },
           },
           { status: 400 }
@@ -149,21 +203,36 @@ export async function POST(request: NextRequest) {
     }
 
     // Both return_url and notify_url must be HTTPS and publicly accessible
+    // Use payment-callback page to handle callback and close tab
+    // Include transaction_id if available for better transaction lookup
     if (transactionId) {
       returnUrl = `${origin}/payment-callback?order_id=${orderId}&transaction_id=${transactionId}`;
     } else {
       returnUrl = `${origin}/payment-callback?order_id=${orderId}`;
     }
     notifyUrl = `${origin}/api/payments/webhook`;
+    
+    console.log('✅ Using publicly accessible HTTPS URLs:');
+    console.log('   Return URL:', returnUrl);
+    console.log('   Notify URL:', notifyUrl);
 
     // Always set order_meta with return_url - this is REQUIRED for valid sessions
     if (returnUrl) {
       orderData.order_meta = {
         return_url: returnUrl,
         notify_url: notifyUrl || returnUrl.replace('/verify', '/webhook'),
+        // Cashfree payment method codes: cc,dc,ppc,ccc,emi,paypal,upi,nb,app,paylater,applepay
+        // nb = netbanking, app = wallet
         payment_methods: 'cc,dc,upi,nb,app,paylater,emi',
       };
+      console.log('Setting order_meta with return_url:', {
+        return_url: returnUrl,
+        notify_url: notifyUrl,
+        env: CASHFREE_ENV,
+      });
     } else {
+      // This should never happen due to check above, but just in case
+      console.error('No return_url available - session will be invalid');
       return NextResponse.json(
         {
           success: false,
@@ -172,6 +241,16 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    console.log('Creating Cashfree payment session (v2025-01-01):', {
+      url: `${CASHFREE_API_URL}/orders`,
+      orderId,
+      orderAmount,
+      hasAppId: !!CASHFREE_APP_ID,
+      hasSecretKey: !!CASHFREE_SECRET_KEY,
+      env: CASHFREE_ENV,
+      apiVersion: '2025-01-01',
+    });
 
     // Create payment session with Cashfree
     // Cashfree uses x-client-id and x-client-secret headers, not Basic Auth
@@ -183,6 +262,7 @@ export async function POST(request: NextRequest) {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         if (attempt > 0) {
+          console.log(`Retrying Cashfree API call (attempt ${attempt + 1}/${maxRetries + 1})...`);
           // Wait before retry (exponential backoff)
           await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
         }
@@ -214,6 +294,7 @@ export async function POST(request: NextRequest) {
           attempt < maxRetries && 
           (error.code === 'EAI_AGAIN' || error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT')
         ) {
+          console.warn(`DNS/Network error on attempt ${attempt + 1}, will retry...`, error.code);
           continue;
         }
         
@@ -225,6 +306,17 @@ export async function POST(request: NextRequest) {
     // Handle errors after retry loop
     if (cashfreeError || !cashfreeResponse) {
       const error = cashfreeError || new Error('Unknown error');
+      console.error('Cashfree API Error Details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        code: error.code,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+        },
+      });
       
       // Handle network/DNS errors after all retries failed
       if (error.code === 'EAI_AGAIN' || error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
@@ -293,11 +385,12 @@ export async function POST(request: NextRequest) {
       }
       
       // Handle 409 Conflict - Order already exists
-      // Fetch existing order and return its payment session
       if (error.response?.status === 409) {
         const errorData = error.response?.data;
+        console.log('⚠️ Order already exists, fetching existing order from Cashfree...');
         
         try {
+          // Fetch the existing order to get its payment_session_id
           const existingOrderResponse = await axios.get(
             `${CASHFREE_API_URL}/orders/${orderId}`,
             {
@@ -315,31 +408,89 @@ export async function POST(request: NextRequest) {
           const existingPaymentSessionId = existingOrder?.payment_session_id;
 
           if (existingPaymentSessionId) {
-            let cleanPaymentSessionId = String(existingPaymentSessionId).trim().replace(/[\s\r\n]+/g, '');
+            console.log('✅ Retrieved existing payment session ID from Cashfree');
+            console.log('   Payment Session ID (raw):', existingPaymentSessionId);
+            console.log('   Payment Session ID length:', existingPaymentSessionId?.length || 0);
+            console.log('   Order Status:', existingOrder?.order_status || 'N/A');
             
-            if (cleanPaymentSessionId.startsWith('session_')) {
-              return NextResponse.json({
-                success: true,
-                data: {
-                  paymentSessionId: cleanPaymentSessionId,
-                  orderId: orderId,
-                  cfOrderId: existingOrder?.cf_order_id || orderId,
-                  orderStatus: existingOrder?.order_status || 'ACTIVE',
-                  environment: CASHFREE_ENV.toLowerCase(),
-                  isExistingOrder: true,
+            // Minimal cleaning - only trim whitespace, preserve the session ID as-is from Cashfree
+            // Cashfree session IDs are valid as returned, don't modify them
+            let cleanPaymentSessionId = String(existingPaymentSessionId).trim();
+            
+            // Only remove whitespace/newlines, but preserve all characters
+            cleanPaymentSessionId = cleanPaymentSessionId.replace(/[\s\r\n]+/g, '');
+            
+            // Validate it starts with session_
+            if (!cleanPaymentSessionId.startsWith('session_')) {
+              console.error('❌ Invalid session ID format from Cashfree:', cleanPaymentSessionId.substring(0, 50));
+              return NextResponse.json(
+                {
+                  success: false,
+                  message: 'Invalid payment session ID format from Cashfree',
+                  details: {
+                    orderId: orderId,
+                    sessionIdPreview: cleanPaymentSessionId.substring(0, 50),
+                  },
                 },
-              });
+                { status: 500 }
+              );
             }
+            
+            console.log('   Payment Session ID (cleaned):', cleanPaymentSessionId.substring(0, 50) + '...');
+            console.log('   Payment Session ID length (after cleaning):', cleanPaymentSessionId.length);
+            
+            // Check order status - if already paid or failed, we might want to handle differently
+            const orderStatus = existingOrder?.order_status || 'ACTIVE';
+            let message = 'Using existing payment session for this order';
+            
+            if (orderStatus === 'PAID' || orderStatus === 'PAYMENT_SUCCESS') {
+              message = 'This order has already been paid. Payment session retrieved for verification.';
+            } else if (orderStatus === 'FAILED' || orderStatus === 'PAYMENT_FAILED') {
+              message = 'Previous payment attempt failed. Using existing payment session to retry.';
+            }
+            
+            // Return the existing session ID
+            const responseData = {
+              success: true,
+              data: {
+                paymentSessionId: cleanPaymentSessionId,
+                orderId: orderId,
+                cfOrderId: existingOrder?.cf_order_id || orderId,
+                orderStatus: orderStatus,
+                environment: CASHFREE_ENV.toLowerCase(),
+                isExistingOrder: true, // Flag to indicate this is an existing order
+              },
+              message: message,
+            };
+            
+            console.log('✅ Returning existing payment session');
+            return NextResponse.json(responseData);
+          } else {
+            // Order exists but no payment session ID - this shouldn't happen, but handle it
+            console.error('❌ Order exists but payment_session_id is missing');
+            return NextResponse.json(
+              {
+                success: false,
+                message: 'Order already exists but payment session is not available. Please use a different order ID.',
+                details: {
+                  code: errorData?.code,
+                  message: errorData?.message,
+                  orderId: orderId,
+                },
+              },
+              { status: 409 }
+            );
           }
         } catch (fetchError: any) {
-          // If fetching fails, return error
+          console.error('❌ Error fetching existing order:', fetchError.message);
           return NextResponse.json(
             {
               success: false,
-              message: errorData?.message || 'Order already exists. Unable to retrieve payment session.',
+              message: errorData?.message || 'Order already exists. Unable to retrieve existing payment session.',
               details: {
                 code: errorData?.code,
                 message: errorData?.message,
+                fetchError: fetchError.message,
               },
             },
             { status: 409 }
@@ -370,6 +521,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Log the full response for debugging
+    console.log('✅ Cashfree order created successfully');
+    console.log('Full Cashfree response:', JSON.stringify(cashfreeResponse.data, null, 2));
+
     const { 
       payment_session_id, 
       payment_link,
@@ -383,6 +538,7 @@ export async function POST(request: NextRequest) {
 
     // Verify order was created successfully
     if (!payment_session_id) {
+      console.error('❌ Invalid Cashfree response - missing payment_session_id:', cashfreeResponse.data);
       return NextResponse.json(
         { 
           success: false, 
@@ -392,6 +548,22 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Verify order status is ACTIVE
+    if (order_status && order_status !== 'ACTIVE') {
+      console.warn('⚠️ Cashfree order status is not ACTIVE:', order_status);
+      console.warn('   Order Status:', order_status);
+      console.warn('   CF Order ID:', cf_order_id);
+      // Still proceed, but log the warning
+    }
+
+    console.log('📋 Order Details:');
+    console.log('   CF Order ID:', cf_order_id);
+    console.log('   Order Status:', order_status || 'Not provided');
+    console.log('   Order ID:', cfOrderId || orderId);
+    console.log('   Payment Session ID (raw):', payment_session_id);
+    console.log('   Payment Session ID length:', payment_session_id?.length || 0);
+    console.log('   Payment Link (from response):', payment_link || 'Not provided');
 
     // Use payment_session_id as-is from Cashfree response (it should be valid)
     // Only perform minimal cleaning if there are obvious issues
@@ -421,12 +593,23 @@ export async function POST(request: NextRequest) {
     cleanPaymentSessionId = cleanPaymentSessionId.replace(/[\s\r\n]+/g, '');
     
     // IMPORTANT: Only remove "paymentpayment" if it's clearly a suffix at the very end
+    // Do NOT use regex that stops at 'p' characters as that would break valid session IDs
+    // Cashfree session IDs can contain 'p' characters in the middle, so we must be careful
     if (cleanPaymentSessionId.endsWith('paymentpayment')) {
       cleanPaymentSessionId = cleanPaymentSessionId.replace(/paymentpayment$/, '');
+      console.warn('⚠️ Removed "paymentpayment" suffix from session ID');
     }
+    
+    // If "paymentpayment" appears elsewhere (not at the end), it's likely part of a valid session ID
+    // Do NOT truncate - Cashfree session IDs are valid as returned
+    
+    console.log('   Using session ID as-provided by Cashfree (with minimal cleaning)');
+    console.log('   Session ID length:', cleanPaymentSessionId.length);
     
     // Validate session ID format (MUST start with "session_")
     if (!cleanPaymentSessionId.startsWith('session_')) {
+      console.error('❌ Payment session ID does not start with "session_" prefix');
+      console.error('   Received:', cleanPaymentSessionId);
       return NextResponse.json(
         { 
           success: false, 
@@ -438,13 +621,28 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate length (Cashfree session IDs are typically 100-200 characters)
+    if (cleanPaymentSessionId.length < 50) {
+      console.warn('⚠️ Payment session ID seems too short:', cleanPaymentSessionId.length);
+    }
     if (cleanPaymentSessionId.length > 1000) {
+      console.warn('⚠️ Payment session ID seems unusually long:', cleanPaymentSessionId.length);
       // Only truncate if it's clearly malformed (has URL fragments or query params)
+      // Extract session ID before any URL fragments (?, #, &)
       const sessionMatch = cleanPaymentSessionId.match(/^(session_[^?#&]+)/);
       if (sessionMatch && sessionMatch[1] && sessionMatch[1].length < cleanPaymentSessionId.length) {
+        console.warn('⚠️ Extracted session ID from URL with fragments');
         cleanPaymentSessionId = sessionMatch[1];
       }
+      // If still too long after removing fragments, it might be a concatenation issue
+      // But don't truncate based on underscores - that would break valid session IDs
     }
+
+    console.log('   Payment Session ID (after cleaning):', cleanPaymentSessionId.substring(0, 100) + '...');
+    console.log('   Payment Session ID length:', cleanPaymentSessionId.length);
+    console.log('   Payment Session ID starts with "session_":', cleanPaymentSessionId.startsWith('session_') ? 'Yes ✅' : 'No ❌');
+    console.log('   Original length:', originalSessionId.length);
+    console.log('   Cleaned length:', cleanPaymentSessionId.length);
+    console.log('   Changed:', originalSessionId !== cleanPaymentSessionId ? 'Yes' : 'No');
 
     // Construct payment link
     // Priority 1: Use payment_link from Cashfree response if provided (most reliable)
@@ -455,41 +653,73 @@ export async function POST(request: NextRequest) {
     let finalPaymentLink = payment_link;
     
     if (finalPaymentLink) {
+      console.log('✅ Using payment_link from Cashfree response');
+      console.log('   Original payment_link:', finalPaymentLink);
+      
       // Verify and fix the payment_link format for both environments
       if (finalPaymentLink.includes('order_token=')) {
         // Extract session ID from order_token parameter if present
         const urlMatch = finalPaymentLink.match(/order_token=([^&]+)/);
         if (urlMatch && urlMatch[1]) {
           const extractedSessionId = decodeURIComponent(urlMatch[1]).trim();
+          // Both environments use the same payments domain - use extracted session ID directly in hash
           finalPaymentLink = `https://payments.cashfree.com/order/#${extractedSessionId}`;
+          console.log('   ✅ Converted to correct format: #payment_session_id');
+          console.log('   Extracted Session ID:', extractedSessionId.substring(0, 50) + '...');
         }
       } else if (!finalPaymentLink.includes('#')) {
+        // If no hash, add it with payment_session_id (do NOT URL encode the hash fragment)
         finalPaymentLink = `https://payments.cashfree.com/order/#${cleanPaymentSessionId}`;
+        console.log('   ✅ Added #payment_session_id to URL');
       } else if (finalPaymentLink.includes('payments.sandbox.cashfree.com')) {
+        // Convert any sandbox-specific domain to the standard payments domain
         finalPaymentLink = finalPaymentLink.replace('payments.sandbox.cashfree.com', 'payments.cashfree.com');
+        console.log('   ✅ Converted to standard payments domain');
       }
       
       // Ensure the URL contains the correct session ID
       if (!finalPaymentLink.includes(cleanPaymentSessionId)) {
+        // Extract existing session ID from hash if present
         const hashMatch = finalPaymentLink.match(/#([^?]+)/);
         if (hashMatch && hashMatch[1]) {
           const existingSessionId = hashMatch[1];
           if (existingSessionId !== cleanPaymentSessionId) {
+            console.warn('⚠️ Session ID mismatch in payment_link, replacing with cleaned version');
             finalPaymentLink = finalPaymentLink.replace(/#[^?]+/, `#${cleanPaymentSessionId}`);
           }
         } else {
+          // No hash found, add it
           finalPaymentLink = `https://payments.cashfree.com/order/#${cleanPaymentSessionId}`;
         }
       }
     } else {
       // Construct payment link from payment_session_id
+      // Both Production and Sandbox use the same payments domain
+      // IMPORTANT: Do NOT URL encode the hash fragment - use session ID as-is
       finalPaymentLink = `https://payments.cashfree.com/order/#${cleanPaymentSessionId}`;
+      console.log('✅ Constructed payment link from payment_session_id');
     }
+
+    console.log('\n🔗 Final Payment Link Validation:');
+    console.log('   URL:', finalPaymentLink);
+    console.log('   URL Length:', finalPaymentLink?.length || 0);
+    
+    // Verify the URL contains the cleaned session ID
+    const sessionIdInUrl = finalPaymentLink?.match(/#([^?]+)/)?.[1];
+    console.log('   Session ID in URL (hash):', sessionIdInUrl?.substring(0, 50) + '...' || 'Not found');
+    console.log('   Session ID matches:', sessionIdInUrl === cleanPaymentSessionId ? 'Yes ✅' : 'No ❌');
+    
+    // Both environments use the same payments domain
+    const isCorrectFormat = finalPaymentLink?.startsWith('https://payments.cashfree.com/order/#');
+    console.log('   Format correct:', isCorrectFormat ? 'Yes ✅' : 'No ❌');
+    console.log('   Environment:', CASHFREE_ENV);
+    console.log('   Note: Both sandbox and production use the same payments.cashfree.com domain');
     
     // Final validation - ensure URL is valid
     try {
       const urlObj = new URL(finalPaymentLink);
       if (!urlObj.hash || !urlObj.hash.startsWith('#session_')) {
+        console.error('❌ Invalid URL format - hash must start with #session_');
         return NextResponse.json(
           {
             success: false,
@@ -499,7 +729,9 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
+      console.log('   URL validation: Valid ✅');
     } catch (urlError) {
+      console.error('❌ Invalid URL format:', urlError);
       return NextResponse.json(
         {
           success: false,
@@ -546,17 +778,51 @@ export async function POST(request: NextRequest) {
                 Authorization: `Bearer ${token}`,
               },
             }
-          ).catch(() => {
-            // Silent fail - don't fail the payment session creation
+          ).catch(err => {
+            // Log error but don't fail the payment session creation
+            console.error('Error creating order in backend:', {
+              message: err.message,
+              status: err.response?.status,
+              statusText: err.response?.statusText,
+              data: err.response?.data,
+              url: err.config?.url,
+            });
+          });
+        } else {
+          console.warn('Skipping backend order creation: No items with valid ObjectId format', {
+            totalItems: items.length,
+            items: items.map(item => ({ productId: item.productId })),
           });
         }
       }
     } catch (error) {
       // Continue even if backend order creation fails
+      console.error('Backend order creation failed:', error);
     }
 
     // Verify we have a valid payment link before returning
+    if (!finalPaymentLink) {
+      console.error('❌ Failed to construct payment link');
+      return NextResponse.json(
+        { 
+          success: false, 
+          message: 'Failed to generate payment link. Please check Cashfree configuration.',
+          details: 'Payment link could not be constructed from Cashfree response'
+        },
+        { status: 500 }
+      );
+    }
+
+    console.log('\n✅ Payment session created successfully');
+    console.log('   Final Payment Link:', finalPaymentLink);
+    console.log('   CF Order ID:', cf_order_id || 'Not provided');
+    console.log('   Order Status:', order_status || 'Not provided');
+
+    // Verify we have a valid payment link before returning
     if (!finalPaymentLink || !finalPaymentLink.includes(cleanPaymentSessionId)) {
+      console.error('❌ Payment link validation failed');
+      console.error('   Final Payment Link:', finalPaymentLink);
+      console.error('   Clean Session ID:', cleanPaymentSessionId);
       return NextResponse.json(
         {
           success: false,
@@ -569,6 +835,7 @@ export async function POST(request: NextRequest) {
 
     // Final validation before returning
     if (!cleanPaymentSessionId || !cleanPaymentSessionId.startsWith('session_')) {
+      console.error('❌ Invalid payment_session_id format');
       return NextResponse.json(
         {
           success: false,
@@ -579,11 +846,54 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Final validation: Ensure payment link uses the correct session ID
+    // Verify the order exists (but don't use the session ID from verification response)
+    // Cashfree's verification endpoint sometimes returns a different session ID that doesn't work
+    // We should use the original cleaned session ID from order creation instead
+    try {
+      console.log('\n🔍 Verifying order exists...');
+      const verifyResponse = await axios.get(
+        `${CASHFREE_API_URL}/orders/${cfOrderId || orderId}`,
+        {
+          headers: {
+            'x-client-id': CASHFREE_APP_ID!,
+            'x-client-secret': CASHFREE_SECRET_KEY!,
+            'x-api-version': '2025-01-01',
+            'Accept': 'application/json',
+          },
+          timeout: 10000,
+        }
+      );
+      
+      if (verifyResponse.data) {
+        console.log('   ✅ Order verified - order exists in Cashfree');
+        console.log('   Order Status:', verifyResponse.data.order_status || 'Not provided');
+        // Note: We intentionally do NOT use the payment_session_id from verification
+        // because it may be different from the one in the order creation response
+        // and using it causes "payment_session_id is not present or is invalid" errors
+      }
+    } catch (verifyError: any) {
+      console.warn('   ⚠️ Could not verify order (non-critical):', verifyError.response?.status || verifyError.message);
+      // Continue anyway - the order was just created, so it should be valid
+    }
+
+    // Final validation: Ensure payment link uses the correct (verified) session ID
+    // Extract session ID from the payment link and compare with cleanPaymentSessionId
     const sessionIdInLink = finalPaymentLink?.match(/#([^?]+)/)?.[1];
     if (sessionIdInLink && sessionIdInLink !== cleanPaymentSessionId) {
+      console.log('   ⚠️ Payment link session ID does not match verified session ID, updating...');
+      console.log('   Link had:', sessionIdInLink.substring(0, 50) + '...');
+      console.log('   Using verified:', cleanPaymentSessionId.substring(0, 50) + '...');
       finalPaymentLink = `https://payments.cashfree.com/order/#${cleanPaymentSessionId}`;
+      console.log('   ✅ Payment link updated with verified session ID');
     }
+
+    console.log('\n✅ Final payment_session_id to return:');
+    console.log('   Preview:', cleanPaymentSessionId.substring(0, 100) + '...');
+    console.log('   Full Length:', cleanPaymentSessionId.length);
+    console.log('   Starts with "session_":', cleanPaymentSessionId.startsWith('session_') ? 'Yes ✅' : 'No ❌');
+    console.log('   Contains only valid characters:', /^[a-zA-Z0-9_-]+$/.test(cleanPaymentSessionId) ? 'Yes ✅' : 'No ❌');
+    console.log('   Final Payment Link:', finalPaymentLink?.substring(0, 100) + '...');
+    console.log('   Payment Link contains correct session ID:', finalPaymentLink?.includes(cleanPaymentSessionId) ? 'Yes ✅' : 'No ❌');
     
     const responseData = {
       success: true,
@@ -615,8 +925,28 @@ export async function POST(request: NextRequest) {
       }
     };
     
+    const processingTime = Date.now() - startTime;
+    console.log('\n✅ RESPONSE DATA:');
+    console.log(JSON.stringify(responseData, null, 2));
+    console.log('\n' + '='.repeat(80));
+    console.log(`✅ API Request completed in ${processingTime}ms`);
+    console.log('='.repeat(80) + '\n');
+    
     return NextResponse.json(responseData);
   } catch (error: any) {
+    const processingTime = Date.now() - startTime;
+    console.error('\n' + '='.repeat(80));
+    console.error('❌ NEXT.JS API ERROR: Create Cashfree Payment Session');
+    console.error('='.repeat(80));
+    console.error('   Error Type:', error.constructor.name);
+    console.error('   Error Message:', error.message);
+    console.error('   Error Stack:', error.stack);
+    if (error.response) {
+      console.error('   Cashfree API Response Status:', error.response.status);
+      console.error('   Cashfree API Response Data:', JSON.stringify(error.response.data, null, 2));
+    }
+    console.error(`   Processing Time: ${processingTime}ms`);
+    console.error('='.repeat(80) + '\n');
     return NextResponse.json(
       {
         success: false,
