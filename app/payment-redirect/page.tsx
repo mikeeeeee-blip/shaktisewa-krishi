@@ -266,7 +266,7 @@ function PaymentRedirectContent() {
               errorDiv.innerHTML = '<p style="margin: 0; color: #92400e; font-weight: 500;">Redirecting to payment gateway...</p>';
               document.body.appendChild(errorDiv);
               setTimeout(() => errorDiv.remove(), 2000);
-            });
+          });
         } catch (error: any) {
           console.error('Error opening Cashfree checkout:', error);
         }
