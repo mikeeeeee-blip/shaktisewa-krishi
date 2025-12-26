@@ -236,6 +236,7 @@ function CheckoutContent() {
             
             if (matchesText) {
               // More lenient clickable check - try clicking even if not obviously clickable
+              const htmlElement = element as HTMLElement;
               const isClickable = element.tagName === 'BUTTON' || 
                                   element.tagName === 'A' || 
                                   element.tagName === 'DIV' ||
@@ -243,11 +244,11 @@ function CheckoutContent() {
                                   element.tagName === 'LI' ||
                                   element.getAttribute('role') === 'button' ||
                                   element.getAttribute('tabindex') !== null ||
-                                  element.onclick !== null ||
+                                  htmlElement.onclick !== null ||
                                   element.getAttribute('onclick') !== null ||
                                   element.getAttribute('data-testid')?.includes('upi') ||
-                                  element.className?.toLowerCase().includes('upi') ||
-                                  element.id?.toLowerCase().includes('upi');
+                                  htmlElement.className?.toLowerCase().includes('upi') ||
+                                  htmlElement.id?.toLowerCase().includes('upi');
               
               // Try clicking even if not obviously clickable (Cashfree might use custom elements)
               if (isClickable || element.tagName === 'DIV' || element.tagName === 'SPAN') {
