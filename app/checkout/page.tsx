@@ -111,13 +111,13 @@ function CheckoutContent() {
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
         try {
-          const response = await fetch('/api/payments/create-session', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+        const response = await fetch('/api/payments/create-session', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
             signal: controller.signal,
-            body: JSON.stringify({
+          body: JSON.stringify({
             orderId: paymentData.order_id,
             orderAmount: paymentData.amount,
             transactionId: paymentData.transaction_id, // Include transaction_id for callback
@@ -219,11 +219,11 @@ function CheckoutContent() {
         }
         throw fetchError;
       }
-    } catch (err: any) {
-      console.error('Error creating payment session:', err);
-      setError(`Failed to create payment session: ${err.message || 'Unknown error'}`);
-      setLoading(false);
-    }
+      } catch (err: any) {
+        console.error('Error creating payment session:', err);
+        setError(`Failed to create payment session: ${err.message || 'Unknown error'}`);
+        setLoading(false);
+      }
     };
 
     createCashfreeSession();
@@ -732,7 +732,7 @@ function CheckoutContent() {
                 // Show user-friendly error message for other errors
                 setError(`Payment initialization failed: ${errorMessage}. Please try again or contact support.`);
               }
-            });
+          });
         } catch (error: any) {
           console.error('Error opening Cashfree checkout:', error);
           setError(`Failed to initialize payment: ${error.message || 'Unknown error'}`);
@@ -774,19 +774,19 @@ function CheckoutContent() {
       }
 
       // Wait a bit for SDK to load (reduced from 500ms to 200ms for faster loading)
-      timeoutId = setTimeout(() => {
-        initializeCashfreeCheckout();
+    timeoutId = setTimeout(() => {
+      initializeCashfreeCheckout();
       }, 200);
 
-      return () => {
-        if (timeoutId) clearTimeout(timeoutId);
-        if (checkSDKInterval) clearInterval(checkSDKInterval);
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (checkSDKInterval) clearInterval(checkSDKInterval);
         if (mutationObserver) mutationObserver.disconnect();
-      };
-    }, [paymentSessionId, environment]);
+    };
+  }, [paymentSessionId, environment]);
 
   // Show Cashfree logo on white background while loading
-  return (
+    return (
     <div style={{ 
       position: 'fixed', 
       top: 0, 
@@ -885,7 +885,7 @@ function CheckoutContent() {
             margin: 0 !important;
           }
           
-          /* Shift Cashfree modal content up by 30% to hide brand name */
+          /* Shift Cashfree modal content up by 20% to hide brand name */
           [class*="modal" i],
           [id*="modal" i],
           [class*="popup" i],
@@ -900,9 +900,9 @@ function CheckoutContent() {
           body > div[style*="position:fixed" i],
           body > div[style*="position: absolute" i],
           body > div[style*="position:absolute" i] {
-            margin-top: -30vh !important;
-            transform: translateY(-30%) !important;
-            top: 30vh !important;
+            margin-top: -20vh !important;
+            transform: translateY(-20%) !important;
+            top: 20vh !important;
           }
           
           /* Target Cashfree's specific modal containers */
@@ -910,8 +910,8 @@ function CheckoutContent() {
           [id*="cf-" i],
           [data-cashfree],
           [data-cf] {
-            margin-top: -30vh !important;
-            transform: translateY(-30%) !important;
+            margin-top: -20vh !important;
+            transform: translateY(-20%) !important;
           }
           
           /* Ensure the modal content is visible and properly positioned */
@@ -936,8 +936,8 @@ function CheckoutContent() {
           }
         }
       `}</style>
-    </div>
-  );
+      </div>
+    );
 }
 
 export default function CheckoutPage() {
