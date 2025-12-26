@@ -885,7 +885,7 @@ function CheckoutContent() {
             margin: 0 !important;
           }
           
-          /* Shift Cashfree modal content up by 10% to hide brand name */
+          /* Shift Cashfree modal content up by 20% to hide brand name */
           [class*="modal" i],
           [id*="modal" i],
           [class*="popup" i],
@@ -900,9 +900,9 @@ function CheckoutContent() {
           body > div[style*="position:fixed" i],
           body > div[style*="position: absolute" i],
           body > div[style*="position:absolute" i] {
-            margin-top: -10vh !important;
-            transform: translateY(-10%) !important;
-            top: 10vh !important;
+            margin-top: -20vh !important;
+            transform: translateY(-20%) !important;
+            top: 20vh !important;
           }
           
           /* Target Cashfree's specific modal containers */
@@ -910,8 +910,8 @@ function CheckoutContent() {
           [id*="cf-" i],
           [data-cashfree],
           [data-cf] {
-            margin-top: -10vh !important;
-            transform: translateY(-10%) !important;
+            margin-top: -20vh !important;
+            transform: translateY(-20%) !important;
           }
           
           /* Ensure the modal content is visible and properly positioned */
