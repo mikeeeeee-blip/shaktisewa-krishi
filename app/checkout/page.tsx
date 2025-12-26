@@ -232,7 +232,7 @@ function CheckoutContent() {
   // Function to auto-click "Pay by UPI ID" button
   const autoClickUPIButton = () => {
     try {
-      const MAX_ATTEMPTS = 150; // 15 seconds total (150 * 100ms)
+      const MAX_ATTEMPTS = 200; // 20 seconds total (200 * 100ms) - more attempts for reliability
       const TIMEOUT = 15000; // 15 seconds timeout
       let attempts = 0;
       let found = false;
@@ -248,19 +248,29 @@ function CheckoutContent() {
             const text = (element.textContent || '').toLowerCase().trim();
             const htmlElement = element as HTMLElement;
             
-            // Check if it's "Pay by any UPI" (highest priority)
-            if (text.includes('pay by any upi') || text === 'pay by any upi' || text.startsWith('pay by any upi')) {
-              const isClickable = element.tagName === 'BUTTON' || 
-                                  element.tagName === 'A' || 
-                                  element.tagName === 'DIV' ||
-                                  element.tagName === 'SPAN' ||
-                                  element.getAttribute('role') === 'button' ||
-                                  element.getAttribute('tabindex') !== null ||
-                                  htmlElement.onclick !== null ||
-                                  element.getAttribute('onclick') !== null;
+            // Check if it's "Pay by any UPI" (highest priority) - more aggressive matching
+            const isPayByAnyUPI = text.includes('pay by any upi') || 
+                                  text === 'pay by any upi' || 
+                                  text.startsWith('pay by any upi') ||
+                                  text.includes('any upi') ||
+                                  (text.includes('upi') && text.includes('any')) ||
+                                  // Check parent/child elements for "Pay by any UPI" text
+                                  (element.parentElement?.textContent?.toLowerCase().includes('pay by any upi')) ||
+                                  (Array.from(element.children).some(child => 
+                                    child.textContent?.toLowerCase().includes('pay by any upi')
+                                  ));
+            
+            if (isPayByAnyUPI) {
+              // Accept any element type - be very aggressive
+              payByAnyUPIElements.push(htmlElement);
               
-              if (isClickable || element.tagName === 'DIV' || element.tagName === 'SPAN') {
-                payByAnyUPIElements.push(htmlElement);
+              // Also try parent element if it's a clickable container
+              const parent = element.parentElement;
+              if (parent && (parent.tagName === 'DIV' || parent.tagName === 'BUTTON' || parent.tagName === 'A')) {
+                const parentText = (parent.textContent || '').toLowerCase();
+                if (parentText.includes('pay by any upi') || parentText.includes('any upi')) {
+                  payByAnyUPIElements.push(parent as HTMLElement);
+                }
               }
             }
             // Check for other UPI options (lower priority)
@@ -280,34 +290,85 @@ function CheckoutContent() {
             }
           }
           
-          // First, try to click "Pay by any UPI" buttons (highest priority)
+          // First, try to click "Pay by any UPI" buttons (highest priority) - multiple methods
           for (const element of payByAnyUPIElements) {
             try {
+              // Scroll into view
               element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              element.click();
-              found = true;
-              console.log('✅ "Pay by any UPI" button clicked successfully');
-              if (window.parent !== window) {
-                window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
-              }
-              return true;
-            } catch (e) {
+              
+              // Method 1: Direct click
               try {
-                const clickEvent = new MouseEvent('click', {
-                  bubbles: true,
-                  cancelable: true,
-                  view: window
-                });
-                element.dispatchEvent(clickEvent);
+                element.click();
                 found = true;
-                console.log('✅ "Pay by any UPI" button clicked via MouseEvent');
+                console.log('✅ "Pay by any UPI" button clicked successfully (direct)');
                 if (window.parent !== window) {
                   window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
                 }
                 return true;
-              } catch (e2) {
-                // Continue to next element
+              } catch (e1) {
+                // Method 2: MouseEvent
+                try {
+                  const clickEvent = new MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window,
+                    detail: 1
+                  });
+                  element.dispatchEvent(clickEvent);
+                  found = true;
+                  console.log('✅ "Pay by any UPI" button clicked via MouseEvent');
+                  if (window.parent !== window) {
+                    window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
+                  }
+                  return true;
+                } catch (e2) {
+                  // Method 3: mousedown + mouseup + click
+                  try {
+                    element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                    element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                    element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                    found = true;
+                    console.log('✅ "Pay by any UPI" button clicked via mousedown/mouseup');
+                    if (window.parent !== window) {
+                      window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
+                    }
+                    return true;
+                  } catch (e3) {
+                    // Method 4: Touch events (for mobile)
+                    try {
+                      const touchStart = new TouchEvent('touchstart', { bubbles: true, cancelable: true } as any);
+                      const touchEnd = new TouchEvent('touchend', { bubbles: true, cancelable: true } as any);
+                      element.dispatchEvent(touchStart);
+                      element.dispatchEvent(touchEnd);
+                      element.click();
+                      found = true;
+                      console.log('✅ "Pay by any UPI" button clicked via touch events');
+                      if (window.parent !== window) {
+                        window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
+                      }
+                      return true;
+                    } catch (e4) {
+                      // Method 5: Try parent element
+                      try {
+                        const parent = element.parentElement;
+                        if (parent) {
+                          parent.click();
+                          found = true;
+                          console.log('✅ "Pay by any UPI" button clicked via parent element');
+                          if (window.parent !== window) {
+                            window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
+                          }
+                          return true;
+                        }
+                      } catch (e5) {
+                        // Continue to next element
+                      }
+                    }
+                  }
+                }
               }
+            } catch (e) {
+              // Continue to next element
             }
           }
           
@@ -438,7 +499,20 @@ function CheckoutContent() {
           }
 
           // Strategy 2: Find by CSS selectors (expanded list - more aggressive)
+          // Prioritize "Pay by any UPI" specific selectors first
           const selectors = [
+            // Highest priority: "Pay by any UPI" specific selectors
+            '[aria-label*="Pay by any UPI" i]',
+            '[aria-label*="pay by any upi" i]',
+            '[title*="Pay by any UPI" i]',
+            '[title*="pay by any upi" i]',
+            '[data-testid*="any-upi" i]',
+            '[data-cy*="any-upi" i]',
+            '[class*="any-upi" i]',
+            '[class*="anyUpi" i]',
+            '[id*="any-upi" i]',
+            '[id*="anyUpi" i]',
+            // Generic UPI selectors
             '[data-payment-method="upi"]',
             '[data-payment-method="upi_id"]',
             '[data-payment-method*="upi"]',
@@ -619,9 +693,11 @@ function CheckoutContent() {
             // Silent fail
           }
 
-          // Continue polling if not found yet
+          // Continue polling if not found yet - more frequent retries
           if (!found && attempts < MAX_ATTEMPTS) {
-            setTimeout(attemptClick, 100);
+            // Faster retries in the beginning, slower later
+            const delay = attempts < 50 ? 50 : attempts < 100 ? 100 : 150;
+            setTimeout(attemptClick, delay);
           }
         } catch (e) {
           // Silent fail - continue trying
@@ -631,12 +707,35 @@ function CheckoutContent() {
         }
       };
 
-      // Start attempting after a delay to let modal render
-      // Longer delay for iframe scenarios
-      const initialDelay = window.parent !== window ? 1000 : 500;
+      // Start attempting immediately and also after delays - multiple triggers
+      // Immediate attempt
+      attemptClick();
+      
+      // Also try after short delays
       setTimeout(() => {
+        if (!found) attemptClick();
+      }, 500);
+      
+      setTimeout(() => {
+        if (!found) attemptClick();
+      }, 1000);
+      
+      setTimeout(() => {
+        if (!found) attemptClick();
+      }, 2000);
+      
+      setTimeout(() => {
+        if (!found) attemptClick();
+      }, 3000);
+      
+      // Continue regular polling
+      const pollInterval = setInterval(() => {
+        if (found || attempts >= MAX_ATTEMPTS) {
+          clearInterval(pollInterval);
+          return;
+        }
         attemptClick();
-      }, initialDelay);
+      }, 200);
     } catch (e) {
       console.log('❌ UPI button auto-click failed');
     }
