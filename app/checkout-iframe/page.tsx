@@ -147,16 +147,20 @@ function CheckoutIframeContent() {
       margin: 0,
       padding: 0,
       overflow: 'hidden',
-      backgroundColor: '#ffffff'
+      backgroundColor: '#ffffff',
+      position: 'relative'
     }}>
       <iframe
         id="checkout-iframe"
         src={upiUrl}
         style={{
           width: '100%',
-          height: '100%',
+          height: 'calc(100% + 30vh)',
           border: 'none',
-          display: 'block'
+          display: 'block',
+          marginTop: '-30vh',
+          transform: 'translateY(-30%)',
+          position: 'relative'
         }}
         title="Cashfree Checkout"
         allow="payment; fullscreen; autoplay"
@@ -166,7 +170,7 @@ function CheckoutIframeContent() {
           console.log('✅ Checkout page loaded in iframe');
           
           // Send message to checkout page to trigger UPI auto-click
-          // The checkout page will handle opening Cashfree and clicking "Pay by UPI ID / QR" button
+          // The checkout page will handle opening Cashfree and clicking "Pay by any UPI" button
           const sendUPIClickTrigger = (delay: number) => {
             setTimeout(() => {
               try {
@@ -191,6 +195,23 @@ function CheckoutIframeContent() {
           setIsLoading(false);
         }}
       />
+      <style jsx global>{`
+        /* Hide brand name by shifting iframe content up by 30% */
+        #checkout-iframe {
+          margin-top: -30vh !important;
+          transform: translateY(-30%) !important;
+          height: calc(100% + 30vh) !important;
+        }
+        
+        /* Mobile-specific: Hide brand name and shift content up */
+        @media (max-width: 768px) {
+          #checkout-iframe {
+            margin-top: -30vh !important;
+            transform: translateY(-30%) !important;
+            height: calc(100% + 30vh) !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

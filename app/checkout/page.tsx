@@ -239,14 +239,116 @@ function CheckoutContent() {
 
       const findAndClickUPIButton = (doc: Document | ShadowRoot): boolean => {
         try {
-          // Strategy 1: Find by text content with more variations (more aggressive)
-          // Target "Pay by UPI ID / QR" button specifically to open phone's UPI app selector
+          // Strategy 1: First, specifically look for "Pay by any UPI" button (highest priority)
+          const allElements = doc.querySelectorAll('*');
+          const payByAnyUPIElements: HTMLElement[] = [];
+          const otherUPIElements: HTMLElement[] = [];
+          
+          for (const element of Array.from(allElements)) {
+            const text = (element.textContent || '').toLowerCase().trim();
+            const htmlElement = element as HTMLElement;
+            
+            // Check if it's "Pay by any UPI" (highest priority)
+            if (text.includes('pay by any upi') || text === 'pay by any upi' || text.startsWith('pay by any upi')) {
+              const isClickable = element.tagName === 'BUTTON' || 
+                                  element.tagName === 'A' || 
+                                  element.tagName === 'DIV' ||
+                                  element.tagName === 'SPAN' ||
+                                  element.getAttribute('role') === 'button' ||
+                                  element.getAttribute('tabindex') !== null ||
+                                  htmlElement.onclick !== null ||
+                                  element.getAttribute('onclick') !== null;
+              
+              if (isClickable || element.tagName === 'DIV' || element.tagName === 'SPAN') {
+                payByAnyUPIElements.push(htmlElement);
+              }
+            }
+            // Check for other UPI options (lower priority)
+            else if (text.includes('pay by upi id') || 
+                     text.includes('pay by upi') || 
+                     text.includes('upi id') ||
+                     (text.includes('upi') && (text.includes('qr') || text.includes('id')))) {
+              const isClickable = element.tagName === 'BUTTON' || 
+                                  element.tagName === 'A' || 
+                                  element.tagName === 'DIV' ||
+                                  element.tagName === 'SPAN' ||
+                                  element.getAttribute('role') === 'button';
+              
+              if (isClickable || element.tagName === 'DIV' || element.tagName === 'SPAN') {
+                otherUPIElements.push(htmlElement);
+              }
+            }
+          }
+          
+          // First, try to click "Pay by any UPI" buttons (highest priority)
+          for (const element of payByAnyUPIElements) {
+            try {
+              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              element.click();
+              found = true;
+              console.log('✅ "Pay by any UPI" button clicked successfully');
+              if (window.parent !== window) {
+                window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
+              }
+              return true;
+            } catch (e) {
+              try {
+                const clickEvent = new MouseEvent('click', {
+                  bubbles: true,
+                  cancelable: true,
+                  view: window
+                });
+                element.dispatchEvent(clickEvent);
+                found = true;
+                console.log('✅ "Pay by any UPI" button clicked via MouseEvent');
+                if (window.parent !== window) {
+                  window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
+                }
+                return true;
+              } catch (e2) {
+                // Continue to next element
+              }
+            }
+          }
+          
+          // If "Pay by any UPI" not found, try other UPI buttons
+          for (const element of otherUPIElements) {
+            try {
+              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              element.click();
+              found = true;
+              console.log('✅ UPI button clicked successfully');
+              if (window.parent !== window) {
+                window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
+              }
+              return true;
+            } catch (e) {
+              try {
+                const clickEvent = new MouseEvent('click', {
+                  bubbles: true,
+                  cancelable: true,
+                  view: window
+                });
+                element.dispatchEvent(clickEvent);
+                found = true;
+                console.log('✅ UPI button clicked via MouseEvent');
+                if (window.parent !== window) {
+                  window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
+                }
+                return true;
+              } catch (e2) {
+                // Continue
+              }
+            }
+          }
+          
+          // Fallback: Try text matching for any UPI-related element
           const textVariations = [
-            'Pay by UPI ID / QR', 'Pay by UPI ID', 'Pay by UPI', 'UPI ID / QR', 'UPI ID', 
-            'UPI', 'upi id / qr', 'upi id', 'pay by upi', 'pay by any upi',
+            'Pay by any UPI', 'Pay by UPI ID / QR', 'Pay by UPI ID', 'Pay by UPI', 
+            'UPI ID / QR', 'UPI ID', 'UPI', 'upi id / qr', 'upi id', 
+            'pay by upi', 'pay by any upi', 'pay by any upi id',
             'upi', 'UPI Payment', 'Pay via UPI', 'UPI Pay', 'Pay UPI', 'UPI Payment Method'
           ];
-          const allElements = doc.querySelectorAll('*');
           
           for (const element of Array.from(allElements)) {
             const text = (element.textContent || '').toLowerCase().trim();
@@ -257,7 +359,6 @@ function CheckoutContent() {
             );
             
             if (matchesText) {
-              // More lenient clickable check - try clicking even if not obviously clickable
               const htmlElement = element as HTMLElement;
               const isClickable = element.tagName === 'BUTTON' || 
                                   element.tagName === 'A' || 
@@ -272,7 +373,6 @@ function CheckoutContent() {
                                   htmlElement.className?.toLowerCase().includes('upi') ||
                                   htmlElement.id?.toLowerCase().includes('upi');
               
-              // Try clicking even if not obviously clickable (Cashfree might use custom elements)
               if (isClickable || element.tagName === 'DIV' || element.tagName === 'SPAN') {
                 try {
                   // Scroll element into view first
@@ -752,7 +852,7 @@ function CheckoutContent() {
         
         /* Mobile-specific styles for Cashfree popup */
         @media (max-width: 768px) {
-          /* Hide brand name/logo in Cashfree modal on mobile */
+          /* Hide brand name/logo in Cashfree modal on mobile - shift content up by 30% */
           [class*="cashfree" i],
           [id*="cashfree" i],
           [class*="brand" i],
@@ -768,15 +868,24 @@ function CheckoutContent() {
           header [id*="brand" i],
           header img,
           [class*="cf-" i],
-          [id*="cf-" i] {
+          [id*="cf-" i],
+          /* Hide foundation/brand name banner */
+          [class*="foundation" i],
+          [class*="serving" i],
+          [class*="banner" i],
+          div:has-text("Shakti sewa foundation"),
+          div:has-text("Serving customers") {
             display: none !important;
             visibility: hidden !important;
             opacity: 0 !important;
             height: 0 !important;
             overflow: hidden !important;
+            max-height: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
           }
           
-          /* Add padding-top 40% for Cashfree popup on mobile */
+          /* Shift Cashfree modal content up by 30% to hide brand name */
           [class*="modal" i],
           [id*="modal" i],
           [class*="popup" i],
@@ -791,8 +900,9 @@ function CheckoutContent() {
           body > div[style*="position:fixed" i],
           body > div[style*="position: absolute" i],
           body > div[style*="position:absolute" i] {
-            padding-top: 40% !important;
-            margin-top: 0 !important;
+            margin-top: -30vh !important;
+            transform: translateY(-30%) !important;
+            top: 30vh !important;
           }
           
           /* Target Cashfree's specific modal containers */
@@ -800,7 +910,8 @@ function CheckoutContent() {
           [id*="cf-" i],
           [data-cashfree],
           [data-cf] {
-            padding-top: 40% !important;
+            margin-top: -30vh !important;
+            transform: translateY(-30%) !important;
           }
           
           /* Ensure the modal content is visible and properly positioned */
