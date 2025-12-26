@@ -178,7 +178,6 @@ function CheckoutIframeContent() {
           id="checkout-iframe"
           src={upiUrl}
           loading="eager"
-          fetchPriority="high"
           style={{
             width: '100%',
             height: 'calc(100% + 17vh)',
