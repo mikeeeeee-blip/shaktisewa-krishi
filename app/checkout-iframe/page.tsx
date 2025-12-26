@@ -155,11 +155,11 @@ function CheckoutIframeContent() {
         src={upiUrl}
         style={{
           width: '100%',
-          height: 'calc(100% + 23vh)',
+          height: 'calc(100% + 17vh)',
           border: 'none',
           display: 'block',
-          marginTop: '-23vh',
-          transform: 'translateY(-23%)',
+          marginTop: '-17vh',
+          transform: 'translateY(-17%)',
           position: 'relative'
         }}
         title="Cashfree Checkout"
@@ -196,19 +196,19 @@ function CheckoutIframeContent() {
         }}
       />
       <style jsx global>{`
-        /* Hide brand name by shifting iframe content up by 23% */
+        /* Hide brand name by shifting iframe content up by 17% */
         #checkout-iframe {
-          margin-top: -23vh !important;
-          transform: translateY(-23%) !important;
-          height: calc(100% + 23vh) !important;
+          margin-top: -17vh !important;
+          transform: translateY(-17%) !important;
+          height: calc(100% + 17vh) !important;
         }
         
         /* Mobile-specific: Hide brand name and shift content up */
         @media (max-width: 768px) {
           #checkout-iframe {
-            margin-top: -23vh !important;
-            transform: translateY(-23%) !important;
-            height: calc(100% + 23vh) !important;
+            margin-top: -17vh !important;
+            transform: translateY(-17%) !important;
+            height: calc(100% + 17vh) !important;
           }
         }
       `}</style>
