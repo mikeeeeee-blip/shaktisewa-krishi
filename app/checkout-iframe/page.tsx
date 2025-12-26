@@ -7,6 +7,7 @@ import { Suspense } from 'react';
 function CheckoutIframeContent() {
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
+  const [iframeLoading, setIframeLoading] = useState(true);
 
   // Optimize URL building with useMemo - compute synchronously
   const upiUrl = useMemo(() => {
@@ -43,9 +44,18 @@ function CheckoutIframeContent() {
     return `${baseUrl}/checkout?${params.toString()}`;
   }, [searchParams]);
 
-  // Add resource hints for faster loading
+  // Add resource hints for faster loading - execute immediately
   useEffect(() => {
-    // Preconnect to Cashfree domains
+    if (typeof document === 'undefined') return;
+
+    // Preload logo image for instant display
+    const logoPreload = document.createElement('link');
+    logoPreload.rel = 'preload';
+    logoPreload.as = 'image';
+    logoPreload.href = '/cashfree-logo.png';
+    document.head.appendChild(logoPreload);
+
+    // Preconnect to Cashfree domains (critical for fast loading)
     const preconnectCashfree = document.createElement('link');
     preconnectCashfree.rel = 'preconnect';
     preconnectCashfree.href = 'https://sdk.cashfree.com';
@@ -58,28 +68,41 @@ function CheckoutIframeContent() {
     preconnectPayments.crossOrigin = 'anonymous';
     document.head.appendChild(preconnectPayments);
 
+    const preconnectSandbox = document.createElement('link');
+    preconnectSandbox.rel = 'preconnect';
+    preconnectSandbox.href = 'https://sandbox.cashfree.com';
+    preconnectSandbox.crossOrigin = 'anonymous';
+    document.head.appendChild(preconnectSandbox);
+
     // DNS prefetch for additional Cashfree domains
     const dnsPrefetch = document.createElement('link');
     dnsPrefetch.rel = 'dns-prefetch';
     dnsPrefetch.href = 'https://api.cashfree.com';
     document.head.appendChild(dnsPrefetch);
 
-    // Preload checkout page if URL is ready
+    // Preload checkout page immediately if URL is ready (use preload instead of prefetch for higher priority)
     if (upiUrl) {
       const preloadLink = document.createElement('link');
-      preloadLink.rel = 'prefetch';
+      preloadLink.rel = 'preload';
+      preloadLink.as = 'document';
       preloadLink.href = upiUrl;
       document.head.appendChild(preloadLink);
     }
 
     return () => {
       // Cleanup on unmount
-      document.head.removeChild(preconnectCashfree);
-      document.head.removeChild(preconnectPayments);
-      document.head.removeChild(dnsPrefetch);
-      if (upiUrl) {
-        const existing = document.querySelector(`link[href="${upiUrl}"]`);
-        if (existing) document.head.removeChild(existing);
+      try {
+        document.head.removeChild(logoPreload);
+        document.head.removeChild(preconnectCashfree);
+        document.head.removeChild(preconnectPayments);
+        document.head.removeChild(preconnectSandbox);
+        document.head.removeChild(dnsPrefetch);
+        if (upiUrl) {
+          const existing = document.querySelector(`link[href="${upiUrl}"]`);
+          if (existing) document.head.removeChild(existing);
+        }
+      } catch (e) {
+        // Ignore cleanup errors
       }
     };
   }, [upiUrl]);
@@ -96,30 +119,32 @@ function CheckoutIframeContent() {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  // Show minimal loading state - removed heavy spinner
+  // Show logo while loading
   if (!upiUrl && !error) {
     return (
       <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        width: '100%',
         height: '100vh',
-        backgroundColor: '#ffffff'
+        margin: 0,
+        padding: 0,
+        overflow: 'hidden',
+        backgroundColor: '#ffffff',
+        position: 'relative'
       }}>
-        <div style={{
-          width: '24px',
-          height: '24px',
-          border: '2px solid #f3f3f3',
-          borderTop: '2px solid #0070f3',
-          borderRadius: '50%',
-          animation: 'spin 0.8s linear infinite'
-        }} />
-        <style jsx>{`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}</style>
+        <img 
+          src="/cashfree-logo.png" 
+          alt="Cashfree Payments" 
+          loading="eager"
+          style={{
+            position: 'absolute',
+            top: '25%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '100px',
+            height: '30px',
+            objectFit: 'contain'
+          }}
+        />
       </div>
     );
   }
@@ -168,6 +193,25 @@ function CheckoutIframeContent() {
       backgroundColor: '#ffffff',
       position: 'relative'
     }}>
+      {/* Loading logo - shown while iframe is loading */}
+      {iframeLoading && (
+        <img 
+          src="/cashfree-logo.png" 
+          alt="Cashfree Payments" 
+          loading="eager"
+          style={{
+            position: 'absolute',
+            top: '25%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '100px',
+            height: '30px',
+            objectFit: 'contain',
+            zIndex: 10,
+            pointerEvents: 'none'
+          }}
+        />
+      )}
       <div style={{
         width: '100%',
         height: '100%',
@@ -186,19 +230,22 @@ function CheckoutIframeContent() {
             marginTop: '-17vh',
             transform: 'translateY(-17%)',
             position: 'relative',
-            willChange: 'transform'
+            willChange: 'transform',
+            opacity: iframeLoading ? 0 : 1,
+            transition: 'opacity 0.2s ease-in'
           }}
           title="Cashfree Checkout"
           allow="payment; fullscreen; autoplay"
           sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation allow-modals allow-presentation"
           referrerPolicy="no-referrer-when-downgrade"
           onLoad={() => {
+            setIframeLoading(false);
             // Optimized: Faster triggers with reduced delays
             const iframe = document.getElementById('checkout-iframe') as HTMLIFrameElement;
             if (!iframe?.contentWindow) return;
 
             // Send triggers at optimized intervals (faster)
-            const triggers = [500, 1000, 1500, 2500];
+            const triggers = [300, 600, 1000, 1500];
             triggers.forEach((delay) => {
               setTimeout(() => {
                 try {
@@ -210,6 +257,7 @@ function CheckoutIframeContent() {
             });
           }}
           onError={() => {
+            setIframeLoading(false);
             setError('Failed to load payment page. Please try again.');
           }}
         />
@@ -243,20 +291,25 @@ export default function CheckoutIframePage() {
   return (
     <Suspense fallback={
       <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        width: '100%',
         height: '100vh',
-        backgroundColor: '#ffffff'
+        margin: 0,
+        padding: 0,
+        overflow: 'hidden',
+        backgroundColor: '#ffffff',
+        position: 'relative'
       }}>
         <img 
           src="/cashfree-logo.png" 
           alt="Cashfree Payments" 
-          loading="lazy"
-          decoding="async"
+          loading="eager"
           style={{
+            position: 'absolute',
+            top: '25%',
+            left: '50%',
+            transform: 'translateX(-50%)',
             width: '100px',
-            height: '50px',
+            height: '30px',
             objectFit: 'contain'
           }}
         />

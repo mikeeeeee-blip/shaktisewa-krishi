@@ -123,7 +123,7 @@ function CheckoutContent() {
 
         // Optimized: Reduced timeout for faster failure detection
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
         try {
         const response = await fetch('/api/payments/create-session', {
@@ -643,7 +643,7 @@ function CheckoutContent() {
       };
 
       // Optimized: Reduced initial delay for faster response
-      const initialDelay = window.parent !== window ? 500 : 200;
+      const initialDelay = window.parent !== window ? 200 : 100; // Reduced delays for faster clicking
       setTimeout(() => {
         attemptClick();
       }, initialDelay);
@@ -762,7 +762,7 @@ function CheckoutContent() {
             if (checkSDKInterval) clearInterval(checkSDKInterval);
             setError('Cashfree payment SDK failed to load. Please refresh the page and try again.');
           }
-        }, 200); // Reduced from 500ms to 200ms for faster checking
+        }, 100); // Reduced to 100ms for faster checking
       }
       };
 
@@ -783,7 +783,7 @@ function CheckoutContent() {
         // Silent fail if MutationObserver not supported
       }
 
-      // Wait a bit for SDK to load (reduced from 500ms to 200ms for faster loading)
+      // Wait a bit for SDK to load (reduced to 100ms for faster loading)
     timeoutId = setTimeout(() => {
       initializeCashfreeCheckout();
       }, 200);
