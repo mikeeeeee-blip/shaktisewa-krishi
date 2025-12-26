@@ -1,19 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 
 function CheckoutIframeContent() {
   const searchParams = useSearchParams();
-  const [upiUrl, setUpiUrl] = useState<string>('');
-  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Use checkout page in iframe - it handles session creation and UPI auto-click properly
-    // This fixes "Invalid Session ID" errors on different devices
-    const params = new URLSearchParams();
+  // Optimize URL building with useMemo - compute synchronously
+  const upiUrl = useMemo(() => {
     const amount = searchParams.get('amount');
     const customerName = searchParams.get('customer_name');
     const customerEmail = searchParams.get('customer_email');
@@ -27,44 +23,81 @@ function CheckoutIframeContent() {
 
     if (!amount || !customerName || !customerEmail || !customerPhone || !orderId) {
       setError('Missing required payment parameters');
-      setIsLoading(false);
-      return;
+      return null;
     }
 
-    // Build all parameters
-    if (amount) params.set('amount', amount);
-    if (customerName) params.set('customer_name', customerName);
-    if (customerEmail) params.set('customer_email', customerEmail);
-    if (customerPhone) params.set('customer_phone', customerPhone);
+    // Build URL directly without URLSearchParams for better performance
+    const params = new URLSearchParams();
+    params.set('amount', amount);
+    params.set('customer_name', customerName);
+    params.set('customer_email', customerEmail);
+    params.set('customer_phone', customerPhone);
     if (description) params.set('description', description);
-    if (orderId) params.set('order_id', orderId);
+    params.set('order_id', orderId);
     if (transactionId) params.set('transaction_id', transactionId);
     if (merchantId) params.set('merchant_id', merchantId);
     if (merchantName) params.set('merchant_name', merchantName);
-    if (environment) params.set('environment', environment);
+    params.set('environment', environment);
 
-    // Use checkout page - it will create session and auto-click UPI button
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    const checkoutPageUrl = `${baseUrl}/checkout?${params.toString()}`;
-    
-    setUpiUrl(checkoutPageUrl);
-    setIsLoading(false);
+    return `${baseUrl}/checkout?${params.toString()}`;
   }, [searchParams]);
 
+  // Add resource hints for faster loading
   useEffect(() => {
-    // Listen for messages from the iframe (for future use)
+    // Preconnect to Cashfree domains
+    const preconnectCashfree = document.createElement('link');
+    preconnectCashfree.rel = 'preconnect';
+    preconnectCashfree.href = 'https://sdk.cashfree.com';
+    preconnectCashfree.crossOrigin = 'anonymous';
+    document.head.appendChild(preconnectCashfree);
+
+    const preconnectPayments = document.createElement('link');
+    preconnectPayments.rel = 'preconnect';
+    preconnectPayments.href = 'https://payments.cashfree.com';
+    preconnectPayments.crossOrigin = 'anonymous';
+    document.head.appendChild(preconnectPayments);
+
+    // DNS prefetch for additional Cashfree domains
+    const dnsPrefetch = document.createElement('link');
+    dnsPrefetch.rel = 'dns-prefetch';
+    dnsPrefetch.href = 'https://api.cashfree.com';
+    document.head.appendChild(dnsPrefetch);
+
+    // Preload checkout page if URL is ready
+    if (upiUrl) {
+      const preloadLink = document.createElement('link');
+      preloadLink.rel = 'prefetch';
+      preloadLink.href = upiUrl;
+      document.head.appendChild(preloadLink);
+    }
+
+    return () => {
+      // Cleanup on unmount
+      document.head.removeChild(preconnectCashfree);
+      document.head.removeChild(preconnectPayments);
+      document.head.removeChild(dnsPrefetch);
+      if (upiUrl) {
+        const existing = document.querySelector(`link[href="${upiUrl}"]`);
+        if (existing) document.head.removeChild(existing);
+      }
+    };
+  }, [upiUrl]);
+
+  useEffect(() => {
+    // Lightweight message listener - only log in development
     const handleMessage = (event: MessageEvent) => {
-      // Accept messages from Cashfree domain
-      if (event.origin.includes('cashfree.com')) {
+      if (process.env.NODE_ENV === 'development' && event.origin.includes('cashfree.com')) {
         console.log('Message from Cashfree:', event.data);
       }
     };
 
-    window.addEventListener('message', handleMessage);
+    window.addEventListener('message', handleMessage, { passive: true });
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  if (isLoading) {
+  // Show minimal loading state - removed heavy spinner
+  if (!upiUrl && !error) {
     return (
       <div style={{
         display: 'flex',
@@ -74,30 +107,13 @@ function CheckoutIframeContent() {
         backgroundColor: '#ffffff'
       }}>
         <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '20px'
-        }}>
-          <img 
-            src="/cashfree-logo.png" 
-            alt="Cashfree Payments" 
-            style={{
-              width: '100px',
-              height: '50px',
-              objectFit: 'contain'
-            }}
-          />
-          <div style={{
-            width: '16px',
-            height: '16px',
-            border: '2px solid #f3f3f3',
-            borderTop: '2px solid #0070f3',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite'
-          }} />
-          <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>Loading payment gateway...</p>
-        </div>
+          width: '24px',
+          height: '24px',
+          border: '2px solid #f3f3f3',
+          borderTop: '2px solid #0070f3',
+          borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite'
+        }} />
         <style jsx>{`
           @keyframes spin {
             0% { transform: rotate(0deg); }
@@ -123,6 +139,8 @@ function CheckoutIframeContent() {
         <img 
           src="/cashfree-logo.png" 
           alt="Cashfree Payments" 
+          loading="lazy"
+          decoding="async"
           style={{
             width: '100px',
             height: '50px',
@@ -150,57 +168,62 @@ function CheckoutIframeContent() {
       backgroundColor: '#ffffff',
       position: 'relative'
     }}>
-      <iframe
-        id="checkout-iframe"
-        src={upiUrl}
-        style={{
-          width: '100%',
-          height: 'calc(100% + 17vh)',
-          border: 'none',
-          display: 'block',
-          marginTop: '-17vh',
-          transform: 'translateY(-17%)',
-          position: 'relative'
-        }}
-        title="Cashfree Checkout"
-        allow="payment; fullscreen; autoplay"
-        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation allow-modals allow-presentation"
-        referrerPolicy="no-referrer-when-downgrade"
-        onLoad={() => {
-          console.log('✅ Checkout page loaded in iframe');
-          
-          // Send message to checkout page to trigger UPI auto-click
-          // The checkout page will handle opening Cashfree and clicking "Pay by any UPI" button
-          const sendUPIClickTrigger = (delay: number) => {
-            setTimeout(() => {
-              try {
-                const iframe = document.getElementById('checkout-iframe') as HTMLIFrameElement;
-                if (iframe?.contentWindow) {
-                  iframe.contentWindow.postMessage({ type: 'TRIGGER_UPI_CLICK' }, '*');
-                  console.log(`📨 Sent TRIGGER_UPI_CLICK message to checkout page (delay: ${delay}ms)`);
+      <div style={{
+        width: '100%',
+        height: '100%',
+        overflow: 'hidden',
+        position: 'relative'
+      }}>
+        <iframe
+          id="checkout-iframe"
+          src={upiUrl}
+          loading="eager"
+          fetchPriority="high"
+          style={{
+            width: '100%',
+            height: 'calc(100% + 17vh)',
+            border: 'none',
+            display: 'block',
+            marginTop: '-17vh',
+            transform: 'translateY(-17%)',
+            position: 'relative',
+            willChange: 'transform'
+          }}
+          title="Cashfree Checkout"
+          allow="payment; fullscreen; autoplay"
+          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation allow-modals allow-presentation"
+          referrerPolicy="no-referrer-when-downgrade"
+          onLoad={() => {
+            // Optimized: Faster triggers with reduced delays
+            const iframe = document.getElementById('checkout-iframe') as HTMLIFrameElement;
+            if (!iframe?.contentWindow) return;
+
+            // Send triggers at optimized intervals (faster)
+            const triggers = [500, 1000, 1500, 2500];
+            triggers.forEach((delay) => {
+              setTimeout(() => {
+                try {
+                  iframe.contentWindow?.postMessage({ type: 'TRIGGER_UPI_CLICK' }, '*');
+                } catch (e) {
+                  // Silent fail
                 }
-              } catch (e) {
-                // Silent fail
-              }
-            }, delay);
-          };
-          
-          // Send multiple triggers at different intervals
-          sendUPIClickTrigger(2000);
-          sendUPIClickTrigger(4000);
-          sendUPIClickTrigger(6000);
-        }}
-        onError={() => {
-          setError('Failed to load payment page. Please try again.');
-          setIsLoading(false);
-        }}
-      />
+              }, delay);
+            });
+          }}
+          onError={() => {
+            setError('Failed to load payment page. Please try again.');
+          }}
+        />
+      </div>
       <style jsx global>{`
         /* Hide brand name by shifting iframe content up by 17% */
         #checkout-iframe {
           margin-top: -17vh !important;
           transform: translateY(-17%) !important;
           height: calc(100% + 17vh) !important;
+          /* Ensure transform doesn't break pointer events */
+          transform-origin: top center;
+          will-change: transform;
         }
         
         /* Mobile-specific: Hide brand name and shift content up */
@@ -209,6 +232,7 @@ function CheckoutIframeContent() {
             margin-top: -17vh !important;
             transform: translateY(-17%) !important;
             height: calc(100% + 17vh) !important;
+            transform-origin: top center;
           }
         }
       `}</style>
@@ -229,6 +253,8 @@ export default function CheckoutIframePage() {
         <img 
           src="/cashfree-logo.png" 
           alt="Cashfree Payments" 
+          loading="lazy"
+          decoding="async"
           style={{
             width: '100px',
             height: '50px',

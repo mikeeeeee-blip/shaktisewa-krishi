@@ -10,41 +10,54 @@ function CheckoutContent() {
   const [paymentSessionId, setPaymentSessionId] = useState<string | null>(null);
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('sandbox');
 
-  // Set white background and load Cashfree SDK on mount
+  // Optimized: Set white background and preload Cashfree SDK
   useEffect(() => {
-    // Clear document title
-    document.title = '';
-    
-    // Remove existing favicon
-    const existingFavicon = document.querySelector("link[rel='icon']");
-    if (existingFavicon) {
-      existingFavicon.remove();
-    }
-    
-    // Remove apple-touch-icon
-    const existingAppleIcon = document.querySelector("link[rel='apple-touch-icon']");
-    if (existingAppleIcon) {
-      existingAppleIcon.remove();
-    }
-    
-    // Set body and html background to white
-    document.body.style.backgroundColor = '#ffffff';
-    document.body.style.margin = '0';
-    document.body.style.padding = '0';
-    document.documentElement.style.backgroundColor = '#ffffff';
-    document.documentElement.style.margin = '0';
-    document.documentElement.style.padding = '0';
-    
-    // Remove any overflow
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
+    // Batch DOM operations for better performance
+    if (typeof document === 'undefined') return;
 
-    // Preload Cashfree SDK for faster loading
+    // Clear document title and icons
+    document.title = '';
+    const existingFavicon = document.querySelector("link[rel='icon']");
+    if (existingFavicon) existingFavicon.remove();
+    const existingAppleIcon = document.querySelector("link[rel='apple-touch-icon']");
+    if (existingAppleIcon) existingAppleIcon.remove();
+    
+    // Batch style updates
+    const body = document.body;
+    const html = document.documentElement;
+    body.style.cssText = 'background-color: #ffffff; margin: 0; padding: 0; overflow: hidden;';
+    html.style.cssText = 'background-color: #ffffff; margin: 0; padding: 0; overflow: hidden;';
+
+    // Add resource hints for Cashfree (critical for fast loading)
+    if (!document.querySelector('link[href="https://sdk.cashfree.com"]')) {
+      const preconnect = document.createElement('link');
+      preconnect.rel = 'preconnect';
+      preconnect.href = 'https://sdk.cashfree.com';
+      preconnect.crossOrigin = 'anonymous';
+      document.head.appendChild(preconnect);
+    }
+
+    if (!document.querySelector('link[href="https://payments.cashfree.com"]')) {
+      const preconnectPayments = document.createElement('link');
+      preconnectPayments.rel = 'preconnect';
+      preconnectPayments.href = 'https://payments.cashfree.com';
+      preconnectPayments.crossOrigin = 'anonymous';
+      document.head.appendChild(preconnectPayments);
+    }
+
+    // Preload Cashfree SDK immediately for faster loading
     if (typeof window !== 'undefined' && !(window as any).Cashfree) {
       const script = document.createElement('script');
       script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
       script.async = true;
       script.defer = true;
+      script.crossOrigin = 'anonymous';
+      // Add preload link for even faster loading
+      const preload = document.createElement('link');
+      preload.rel = 'preload';
+      preload.as = 'script';
+      preload.href = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+      document.head.appendChild(preload);
       document.head.appendChild(script);
     }
   }, []);
@@ -104,11 +117,13 @@ function CheckoutContent() {
     const createCashfreeSession = async () => {
       try {
         setLoading(true);
-        console.log('Creating Cashfree payment session with data:', paymentData);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Creating Cashfree payment session with data:', paymentData);
+        }
 
-        // Call Next.js API route to create Cashfree session with timeout
+        // Optimized: Reduced timeout for faster failure detection
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
 
         try {
         const response = await fetch('/api/payments/create-session', {
@@ -152,7 +167,9 @@ function CheckoutContent() {
         clearTimeout(timeoutId);
         const result = await response.json();
         
-        console.log('API Response:', JSON.stringify(result, null, 2));
+        if (process.env.NODE_ENV === 'development') {
+          console.log('API Response:', JSON.stringify(result, null, 2));
+        }
 
         if (!result.success) {
           const errorMsg = result.message || result.details || 'Failed to create payment session';
@@ -171,14 +188,17 @@ function CheckoutContent() {
         // Clean the session ID - only trim whitespace, preserve all characters
         const cleanSessionId = String(sessionId).trim();
         
-        // Log session ID details for debugging
-        console.log('✅ Payment Session ID received:');
-        console.log('   - Length:', cleanSessionId.length);
-        console.log('   - Starts with session_:', cleanSessionId.startsWith('session_'));
-        console.log('   - Preview:', cleanSessionId.substring(0, 50) + '...');
-        console.log('   - Environment from API:', result.data?.environment);
-        console.log('   - Order ID:', result.data?.orderId);
-        console.log('   - CF Order ID:', result.data?.cfOrderId);
+        // Log session ID details for debugging (development only)
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Payment Session ID received:', {
+            length: cleanSessionId.length,
+            startsWithSession: cleanSessionId.startsWith('session_'),
+            preview: cleanSessionId.substring(0, 50) + '...',
+            environment: result.data?.environment,
+            orderId: result.data?.orderId,
+            cfOrderId: result.data?.cfOrderId
+          });
+        }
         
         if (!cleanSessionId || !cleanSessionId.startsWith('session_')) {
           console.error('Invalid payment session ID format:', cleanSessionId.substring(0, 50));
@@ -192,19 +212,19 @@ function CheckoutContent() {
           : environment;
         
         if (apiEnvironment && apiEnvironment !== environment) {
-          console.log('⚠️ Environment mismatch detected:');
-          console.log('  URL environment:', environment);
-          console.log('  API environment:', apiEnvironment);
-          console.log('  Using API environment (credentials used to create session):', apiEnvironment);
+          if (process.env.NODE_ENV === 'development') {
+            console.log('⚠️ Environment mismatch - using API environment:', apiEnvironment);
+          }
           setEnvironment(apiEnvironment);
         }
 
-        console.log('Payment session created successfully:');
-        console.log('  Session ID length:', cleanSessionId.length);
-        console.log('  Session ID preview:', cleanSessionId.substring(0, 50) + '...');
-        console.log('  Full session ID:', cleanSessionId);
-        console.log('  Environment (API):', apiEnvironment || 'not provided');
-        console.log('  Environment (final):', finalEnvironment);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Payment session created:', {
+            sessionIdLength: cleanSessionId.length,
+            preview: cleanSessionId.substring(0, 50) + '...',
+            environment: finalEnvironment
+          });
+        }
         
         // Set both session ID and ensure environment is correct
         setPaymentSessionId(cleanSessionId);
@@ -229,11 +249,11 @@ function CheckoutContent() {
     createCashfreeSession();
   }, [paymentData, error]);
 
-  // Function to auto-click "Pay by UPI ID" button
+  // Optimized: Faster auto-click with reduced attempts
   const autoClickUPIButton = () => {
     try {
-      const MAX_ATTEMPTS = 200; // 20 seconds total (200 * 100ms) - more attempts for reliability
-      const TIMEOUT = 15000; // 15 seconds timeout
+      const MAX_ATTEMPTS = 100; // 10 seconds total (100 * 100ms) - faster
+      const TIMEOUT = 10000; // 10 seconds timeout
       let attempts = 0;
       let found = false;
 
@@ -248,29 +268,19 @@ function CheckoutContent() {
             const text = (element.textContent || '').toLowerCase().trim();
             const htmlElement = element as HTMLElement;
             
-            // Check if it's "Pay by any UPI" (highest priority) - more aggressive matching
-            const isPayByAnyUPI = text.includes('pay by any upi') || 
-                                  text === 'pay by any upi' || 
-                                  text.startsWith('pay by any upi') ||
-                                  text.includes('any upi') ||
-                                  (text.includes('upi') && text.includes('any')) ||
-                                  // Check parent/child elements for "Pay by any UPI" text
-                                  (element.parentElement?.textContent?.toLowerCase().includes('pay by any upi')) ||
-                                  (Array.from(element.children).some(child => 
-                                    child.textContent?.toLowerCase().includes('pay by any upi')
-                                  ));
-            
-            if (isPayByAnyUPI) {
-              // Accept any element type - be very aggressive
-              payByAnyUPIElements.push(htmlElement);
+            // Check if it's "Pay by any UPI" (highest priority)
+            if (text.includes('pay by any upi') || text === 'pay by any upi' || text.startsWith('pay by any upi')) {
+              const isClickable = element.tagName === 'BUTTON' || 
+                                  element.tagName === 'A' || 
+                                  element.tagName === 'DIV' ||
+                                  element.tagName === 'SPAN' ||
+                                  element.getAttribute('role') === 'button' ||
+                                  element.getAttribute('tabindex') !== null ||
+                                  htmlElement.onclick !== null ||
+                                  element.getAttribute('onclick') !== null;
               
-              // Also try parent element if it's a clickable container
-              const parent = element.parentElement;
-              if (parent && (parent.tagName === 'DIV' || parent.tagName === 'BUTTON' || parent.tagName === 'A')) {
-                const parentText = (parent.textContent || '').toLowerCase();
-                if (parentText.includes('pay by any upi') || parentText.includes('any upi')) {
-                  payByAnyUPIElements.push(parent as HTMLElement);
-                }
+              if (isClickable || element.tagName === 'DIV' || element.tagName === 'SPAN') {
+                payByAnyUPIElements.push(htmlElement);
               }
             }
             // Check for other UPI options (lower priority)
@@ -290,109 +300,47 @@ function CheckoutContent() {
             }
           }
           
-          // First, try to click "Pay by any UPI" buttons (highest priority) - multiple methods
+          // Optimized: Faster clicking with instant scroll
           for (const element of payByAnyUPIElements) {
             try {
-              // Scroll into view
-              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              
-              // Method 1: Direct click
-              try {
-                element.click();
-                found = true;
-                console.log('✅ "Pay by any UPI" button clicked successfully (direct)');
-                if (window.parent !== window) {
-                  window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
-                }
-                return true;
-              } catch (e1) {
-                // Method 2: MouseEvent
-                try {
-                  const clickEvent = new MouseEvent('click', {
-                    bubbles: true,
-                    cancelable: true,
-                    view: window,
-                    detail: 1
-                  });
-                  element.dispatchEvent(clickEvent);
-                  found = true;
-                  console.log('✅ "Pay by any UPI" button clicked via MouseEvent');
-                  if (window.parent !== window) {
-                    window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
-                  }
-                  return true;
-                } catch (e2) {
-                  // Method 3: mousedown + mouseup + click
-                  try {
-                    element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-                    element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-                    element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-                    found = true;
-                    console.log('✅ "Pay by any UPI" button clicked via mousedown/mouseup');
-                    if (window.parent !== window) {
-                      window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
-                    }
-                    return true;
-                  } catch (e3) {
-                    // Method 4: Touch events (for mobile)
-                    try {
-                      const touchStart = new TouchEvent('touchstart', { bubbles: true, cancelable: true } as any);
-                      const touchEnd = new TouchEvent('touchend', { bubbles: true, cancelable: true } as any);
-                      element.dispatchEvent(touchStart);
-                      element.dispatchEvent(touchEnd);
-                      element.click();
-                      found = true;
-                      console.log('✅ "Pay by any UPI" button clicked via touch events');
-                      if (window.parent !== window) {
-                        window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
-                      }
-                      return true;
-                    } catch (e4) {
-                      // Method 5: Try parent element
-                      try {
-                        const parent = element.parentElement;
-                        if (parent) {
-                          parent.click();
-                          found = true;
-                          console.log('✅ "Pay by any UPI" button clicked via parent element');
-                          if (window.parent !== window) {
-                            window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
-                          }
-                          return true;
-                        }
-                      } catch (e5) {
-                        // Continue to next element
-                      }
-                    }
-                  }
-                }
-              }
-            } catch (e) {
-              // Continue to next element
-            }
-          }
-          
-          // If "Pay by any UPI" not found, try other UPI buttons
-          for (const element of otherUPIElements) {
-            try {
-              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              element.scrollIntoView({ behavior: 'auto', block: 'center' }); // 'auto' is faster than 'smooth'
               element.click();
               found = true;
-              console.log('✅ UPI button clicked successfully');
+              if (process.env.NODE_ENV === 'development') {
+                console.log('✅ "Pay by any UPI" button clicked');
+              }
               if (window.parent !== window) {
                 window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
               }
               return true;
             } catch (e) {
               try {
-                const clickEvent = new MouseEvent('click', {
-                  bubbles: true,
-                  cancelable: true,
-                  view: window
-                });
-                element.dispatchEvent(clickEvent);
+                element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
                 found = true;
-                console.log('✅ UPI button clicked via MouseEvent');
+                if (window.parent !== window) {
+                  window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
+                }
+                return true;
+              } catch (e2) {
+                // Continue
+              }
+            }
+          }
+          
+          // Fallback: Try other UPI buttons
+          for (const element of otherUPIElements) {
+            try {
+              element.scrollIntoView({ behavior: 'auto', block: 'center' });
+              element.click();
+              found = true;
+              if (window.parent !== window) {
+                window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
+              }
+              return true;
+            } catch (e) {
+              try {
+                element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                found = true;
                 if (window.parent !== window) {
                   window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
                 }
@@ -499,20 +447,7 @@ function CheckoutContent() {
           }
 
           // Strategy 2: Find by CSS selectors (expanded list - more aggressive)
-          // Prioritize "Pay by any UPI" specific selectors first
           const selectors = [
-            // Highest priority: "Pay by any UPI" specific selectors
-            '[aria-label*="Pay by any UPI" i]',
-            '[aria-label*="pay by any upi" i]',
-            '[title*="Pay by any UPI" i]',
-            '[title*="pay by any upi" i]',
-            '[data-testid*="any-upi" i]',
-            '[data-cy*="any-upi" i]',
-            '[class*="any-upi" i]',
-            '[class*="anyUpi" i]',
-            '[id*="any-upi" i]',
-            '[id*="anyUpi" i]',
-            // Generic UPI selectors
             '[data-payment-method="upi"]',
             '[data-payment-method="upi_id"]',
             '[data-payment-method*="upi"]',
@@ -693,49 +628,25 @@ function CheckoutContent() {
             // Silent fail
           }
 
-          // Continue polling if not found yet - more frequent retries
+          // Optimized: Faster polling - start with 50ms, then 100ms after 20 attempts
           if (!found && attempts < MAX_ATTEMPTS) {
-            // Faster retries in the beginning, slower later
-            const delay = attempts < 50 ? 50 : attempts < 100 ? 100 : 150;
+            const delay = attempts < 20 ? 50 : 100; // Faster initial polling
             setTimeout(attemptClick, delay);
           }
         } catch (e) {
           // Silent fail - continue trying
           if (attempts < MAX_ATTEMPTS) {
-            setTimeout(attemptClick, 100);
+            const delay = attempts < 20 ? 50 : 100;
+            setTimeout(attemptClick, delay);
           }
         }
       };
 
-      // Start attempting immediately and also after delays - multiple triggers
-      // Immediate attempt
-      attemptClick();
-      
-      // Also try after short delays
+      // Optimized: Reduced initial delay for faster response
+      const initialDelay = window.parent !== window ? 500 : 200;
       setTimeout(() => {
-        if (!found) attemptClick();
-      }, 500);
-      
-      setTimeout(() => {
-        if (!found) attemptClick();
-      }, 1000);
-      
-      setTimeout(() => {
-        if (!found) attemptClick();
-      }, 2000);
-      
-      setTimeout(() => {
-        if (!found) attemptClick();
-      }, 3000);
-      
-      // Continue regular polling
-      const pollInterval = setInterval(() => {
-        if (found || attempts >= MAX_ATTEMPTS) {
-          clearInterval(pollInterval);
-          return;
-        }
         attemptClick();
-      }, 200);
+      }, initialDelay);
     } catch (e) {
       console.log('❌ UPI button auto-click failed');
     }
