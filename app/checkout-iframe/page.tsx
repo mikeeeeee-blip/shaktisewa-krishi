@@ -9,6 +9,8 @@ function CheckoutIframeContent() {
   const [error, setError] = useState<string | null>(null);
   const [iframeLoading, setIframeLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [showIframe, setShowIframe] = useState(false);
+  const [preloadIframe, setPreloadIframe] = useState<HTMLIFrameElement | null>(null);
 
   // Ensure component is mounted before rendering and set body background immediately
   useEffect(() => {
@@ -91,19 +93,48 @@ function CheckoutIframeContent() {
     preconnectSandbox.crossOrigin = 'anonymous';
     document.head.appendChild(preconnectSandbox);
 
+    const preconnectProduction = document.createElement('link');
+    preconnectProduction.rel = 'preconnect';
+    preconnectProduction.href = 'https://www.cashfree.com';
+    preconnectProduction.crossOrigin = 'anonymous';
+    document.head.appendChild(preconnectProduction);
+
     // DNS prefetch for additional Cashfree domains
     const dnsPrefetch = document.createElement('link');
     dnsPrefetch.rel = 'dns-prefetch';
     dnsPrefetch.href = 'https://api.cashfree.com';
     document.head.appendChild(dnsPrefetch);
 
+    let preloadLink: HTMLLinkElement | null = null;
+    let prefetchLink: HTMLLinkElement | null = null;
+    let hiddenIframe: HTMLIFrameElement | null = null;
+
     // Preload checkout page immediately if URL is ready (use preload instead of prefetch for higher priority)
     if (upiUrl) {
-      const preloadLink = document.createElement('link');
+      preloadLink = document.createElement('link');
       preloadLink.rel = 'preload';
       preloadLink.as = 'document';
       preloadLink.href = upiUrl;
       document.head.appendChild(preloadLink);
+
+      // Also prefetch for additional optimization
+      prefetchLink = document.createElement('link');
+      prefetchLink.rel = 'prefetch';
+      prefetchLink.href = upiUrl;
+      document.head.appendChild(prefetchLink);
+
+      // Create hidden iframe to preload in background for instant display
+      hiddenIframe = document.createElement('iframe');
+      hiddenIframe.src = upiUrl;
+      hiddenIframe.style.display = 'none';
+      hiddenIframe.style.width = '0';
+      hiddenIframe.style.height = '0';
+      hiddenIframe.style.border = 'none';
+      hiddenIframe.style.position = 'absolute';
+      hiddenIframe.style.visibility = 'hidden';
+      hiddenIframe.loading = 'eager';
+      document.body.appendChild(hiddenIframe);
+      setPreloadIframe(hiddenIframe);
     }
 
     return () => {
@@ -113,16 +144,33 @@ function CheckoutIframeContent() {
         document.head.removeChild(preconnectCashfree);
         document.head.removeChild(preconnectPayments);
         document.head.removeChild(preconnectSandbox);
+        document.head.removeChild(preconnectProduction);
         document.head.removeChild(dnsPrefetch);
-        if (upiUrl) {
-          const existing = document.querySelector(`link[href="${upiUrl}"]`);
-          if (existing) document.head.removeChild(existing);
+        if (preloadLink && preloadLink.parentNode) {
+          document.head.removeChild(preloadLink);
+        }
+        if (prefetchLink && prefetchLink.parentNode) {
+          document.head.removeChild(prefetchLink);
+        }
+        if (hiddenIframe && hiddenIframe.parentNode) {
+          hiddenIframe.parentNode.removeChild(hiddenIframe);
         }
       } catch (e) {
         // Ignore cleanup errors
       }
     };
   }, [upiUrl]);
+
+  // 1 second delay before showing iframe - show logo during this time
+  useEffect(() => {
+    if (mounted && upiUrl && !error) {
+      const timer = setTimeout(() => {
+        setShowIframe(true);
+      }, 1000); // 1 second delay
+
+      return () => clearTimeout(timer);
+    }
+  }, [mounted, upiUrl, error]);
 
   useEffect(() => {
     // Lightweight message listener - only log in development
@@ -239,8 +287,8 @@ function CheckoutIframeContent() {
       backgroundColor: '#ffffff',
       position: 'relative'
     }}>
-      {/* Loading logo - shown while iframe is loading */}
-      {iframeLoading && (
+      {/* Loading logo - shown for 1 second delay and while iframe is loading */}
+      {(!showIframe || iframeLoading) && (
         <div style={{
           position: 'absolute',
           top: '25%',
@@ -284,53 +332,65 @@ function CheckoutIframeContent() {
         overflow: 'hidden',
         position: 'relative'
       }}>
-        <iframe
-          id="checkout-iframe"
-          src={upiUrl}
-          loading="eager"
-          style={{
-            width: '100%',
-            height: 'calc(100% + 17vh)',
-            border: 'none',
-            display: 'block',
-            marginTop: '-17vh',
-            transform: 'translateY(-17%)',
-            position: 'relative',
-            willChange: 'transform',
-            opacity: iframeLoading ? 0 : 1,
-            transition: 'opacity 0.2s ease-in'
-          }}
-          title="Cashfree Checkout"
-          allow="payment; fullscreen; autoplay"
-          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation allow-modals allow-presentation"
-          referrerPolicy="no-referrer-when-downgrade"
-          onLoad={() => {
-            // Add a small delay before hiding logo to ensure smooth transition
-            setTimeout(() => {
-              setIframeLoading(false);
-            }, 300);
-            
-            // Optimized: Faster triggers with reduced delays
-            const iframe = document.getElementById('checkout-iframe') as HTMLIFrameElement;
-            if (!iframe?.contentWindow) return;
-
-            // Send triggers at optimized intervals (faster)
-            const triggers = [300, 600, 1000, 1500];
-            triggers.forEach((delay) => {
-              setTimeout(() => {
+        {/* Show iframe only after 1 second delay - it's already preloading in background */}
+        {showIframe && (
+          <iframe
+            id="checkout-iframe"
+            src={upiUrl}
+            loading="eager"
+            style={{
+              width: '100%',
+              height: 'calc(100% + 17vh)',
+              border: 'none',
+              display: 'block',
+              marginTop: '-17vh',
+              transform: 'translateY(-17%)',
+              position: 'relative',
+              willChange: 'transform',
+              opacity: iframeLoading ? 0 : 1,
+              transition: 'opacity 0.3s ease-in'
+            }}
+            title="Cashfree Checkout"
+            allow="payment; fullscreen; autoplay"
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation allow-modals allow-presentation"
+            referrerPolicy="no-referrer-when-downgrade"
+            onLoad={() => {
+              // Cleanup hidden preload iframe
+              if (preloadIframe && preloadIframe.parentNode) {
                 try {
-                  iframe.contentWindow?.postMessage({ type: 'TRIGGER_UPI_CLICK' }, '*');
+                  preloadIframe.parentNode.removeChild(preloadIframe);
                 } catch (e) {
-                  // Silent fail
+                  // Ignore cleanup errors
                 }
-              }, delay);
-            });
-          }}
-          onError={() => {
-            setIframeLoading(false);
-            setError('Failed to load payment page. Please try again.');
-          }}
-        />
+              }
+
+              // Add a small delay before hiding logo to ensure smooth transition
+              setTimeout(() => {
+                setIframeLoading(false);
+              }, 200);
+              
+              // Optimized: Faster triggers with reduced delays
+              const iframe = document.getElementById('checkout-iframe') as HTMLIFrameElement;
+              if (!iframe?.contentWindow) return;
+
+              // Send triggers at optimized intervals (faster)
+              const triggers = [300, 600, 1000, 1500];
+              triggers.forEach((delay) => {
+                setTimeout(() => {
+                  try {
+                    iframe.contentWindow?.postMessage({ type: 'TRIGGER_UPI_CLICK' }, '*');
+                  } catch (e) {
+                    // Silent fail
+                  }
+                }, delay);
+              });
+            }}
+            onError={() => {
+              setIframeLoading(false);
+              setError('Failed to load payment page. Please try again.');
+            }}
+          />
+        )}
       </div>
       <style jsx global>{`
         /* Hide brand name by shifting iframe content up by 17% */
