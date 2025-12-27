@@ -8,6 +8,23 @@ function CheckoutIframeContent() {
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [iframeLoading, setIframeLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  // Ensure component is mounted before rendering and set body background immediately
+  useEffect(() => {
+    // Set body background immediately to prevent white flash
+    if (typeof document !== 'undefined') {
+      document.body.style.backgroundColor = '#ffffff';
+      document.body.style.margin = '0';
+      document.body.style.padding = '0';
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.backgroundColor = '#ffffff';
+      document.documentElement.style.margin = '0';
+      document.documentElement.style.padding = '0';
+      document.documentElement.style.overflow = 'hidden';
+    }
+    setMounted(true);
+  }, []);
 
   // Optimize URL building with useMemo - compute synchronously
   const upiUrl = useMemo(() => {
@@ -119,8 +136,8 @@ function CheckoutIframeContent() {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  // Show logo while loading
-  if (!upiUrl && !error) {
+  // Show logo while loading or if not mounted yet
+  if (!mounted || (!upiUrl && !error)) {
     return (
       <div style={{
         width: '100%',
@@ -129,22 +146,51 @@ function CheckoutIframeContent() {
         padding: 0,
         overflow: 'hidden',
         backgroundColor: '#ffffff',
-        position: 'relative'
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
       }}>
-        <img 
-          src="/cashfree-logo.png" 
-          alt="Cashfree Payments" 
-          loading="eager"
-          style={{
-            position: 'absolute',
-            top: '25%',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: '100px',
-            height: '30px',
-            objectFit: 'contain'
-          }}
-        />
+        <div style={{
+          position: 'absolute',
+          top: '25%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '20px'
+        }}>
+          <img 
+            src="/cashfree-logo.png" 
+            alt="Cashfree Payments" 
+            loading="eager"
+            style={{
+              width: '100px',
+              height: '30px',
+              objectFit: 'contain',
+              display: 'block'
+            }}
+            onError={(e) => {
+              // Fallback if image fails to load
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
+          />
+          <div style={{
+            width: '24px',
+            height: '24px',
+            border: '2px solid #f3f3f3',
+            borderTop: '2px solid #0070f3',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite'
+          }} />
+        </div>
+        <style jsx>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
     );
   }
@@ -195,22 +241,42 @@ function CheckoutIframeContent() {
     }}>
       {/* Loading logo - shown while iframe is loading */}
       {iframeLoading && (
-        <img 
-          src="/cashfree-logo.png" 
-          alt="Cashfree Payments" 
-          loading="eager"
-          style={{
-            position: 'absolute',
-            top: '25%',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: '100px',
-            height: '30px',
-            objectFit: 'contain',
-            zIndex: 10,
-            pointerEvents: 'none'
-          }}
-        />
+        <div style={{
+          position: 'absolute',
+          top: '25%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 10,
+          pointerEvents: 'none',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '20px'
+        }}>
+          <img 
+            src="/cashfree-logo.png" 
+            alt="Cashfree Payments" 
+            loading="eager"
+            style={{
+              width: '100px',
+              height: '30px',
+              objectFit: 'contain',
+              display: 'block'
+            }}
+            onError={(e) => {
+              // Fallback if image fails to load
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
+          />
+          <div style={{
+            width: '20px',
+            height: '20px',
+            border: '2px solid #f3f3f3',
+            borderTop: '2px solid #0070f3',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite'
+          }} />
+        </div>
       )}
       <div style={{
         width: '100%',
@@ -239,7 +305,11 @@ function CheckoutIframeContent() {
           sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation allow-modals allow-presentation"
           referrerPolicy="no-referrer-when-downgrade"
           onLoad={() => {
-            setIframeLoading(false);
+            // Add a small delay before hiding logo to ensure smooth transition
+            setTimeout(() => {
+              setIframeLoading(false);
+            }, 300);
+            
             // Optimized: Faster triggers with reduced delays
             const iframe = document.getElementById('checkout-iframe') as HTMLIFrameElement;
             if (!iframe?.contentWindow) return;
@@ -282,6 +352,20 @@ function CheckoutIframeContent() {
             transform-origin: top center;
           }
         }
+
+        /* Ensure body and html have white background to prevent flash */
+        body, html {
+          background-color: #ffffff !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          overflow: hidden !important;
+        }
+
+        /* Loading spinner animation */
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
       `}</style>
     </div>
   );
@@ -297,22 +381,50 @@ export default function CheckoutIframePage() {
         padding: 0,
         overflow: 'hidden',
         backgroundColor: '#ffffff',
-        position: 'relative'
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
       }}>
-        <img 
-          src="/cashfree-logo.png" 
-          alt="Cashfree Payments" 
-          loading="eager"
-          style={{
-            position: 'absolute',
-            top: '25%',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: '100px',
-            height: '30px',
-            objectFit: 'contain'
-          }}
-        />
+        <div style={{
+          position: 'absolute',
+          top: '25%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '20px'
+        }}>
+          <img 
+            src="/cashfree-logo.png" 
+            alt="Cashfree Payments" 
+            loading="eager"
+            style={{
+              width: '100px',
+              height: '30px',
+              objectFit: 'contain',
+              display: 'block'
+            }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
+          />
+          <div style={{
+            width: '24px',
+            height: '24px',
+            border: '2px solid #f3f3f3',
+            borderTop: '2px solid #0070f3',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite'
+          }} />
+        </div>
+        <style jsx>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
     }>
       <CheckoutIframeContent />
