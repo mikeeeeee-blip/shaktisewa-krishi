@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+import Script from 'next/script';
 
 function CheckoutIframeContent() {
   const searchParams = useSearchParams();
@@ -18,6 +19,34 @@ function CheckoutIframeContent() {
       // Use cssText for batch updates (faster)
       document.body.style.cssText = 'background-color: #ffffff; margin: 0; padding: 0; overflow: hidden;';
       document.documentElement.style.cssText = 'background-color: #ffffff; margin: 0; padding: 0; overflow: hidden;';
+      
+      // Create overlay immediately if it doesn't exist (before React renders)
+      if (!document.getElementById('loading-overlay-immediate')) {
+        const overlay = document.createElement('div');
+        overlay.id = 'loading-overlay-immediate';
+        overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #ffffff; z-index: 99999; display: flex; align-items: center; justify-content: center; pointer-events: none;';
+        
+        const logoContainer = document.createElement('div');
+        logoContainer.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 20px;';
+        
+        const logo = document.createElement('img');
+        logo.src = '/cashfree-logo.png';
+        logo.alt = 'Cashfree Payments';
+        logo.style.cssText = 'width: 100px; height: 30px; object-fit: contain; display: block;';
+        
+        const spinner = document.createElement('div');
+        spinner.style.cssText = 'width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #0070f3; border-radius: 50%; animation: spin 0.8s linear infinite;';
+        
+        // Add spinner animation
+        const style = document.createElement('style');
+        style.textContent = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
+        document.head.appendChild(style);
+        
+        logoContainer.appendChild(logo);
+        logoContainer.appendChild(spinner);
+        overlay.appendChild(logoContainer);
+        document.body.appendChild(overlay);
+      }
       
       // Add viewport meta if not present (for mobile optimization)
       if (!document.querySelector('meta[name="viewport"]')) {
@@ -196,7 +225,7 @@ function CheckoutIframeContent() {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  // Show logo while loading or if not mounted yet
+  // Show logo while loading or if not mounted yet - ALWAYS show overlay initially
   if (!mounted || (!upiUrl && !error)) {
     return (
       <div style={{
@@ -206,16 +235,15 @@ function CheckoutIframeContent() {
         padding: 0,
         overflow: 'hidden',
         backgroundColor: '#ffffff',
-        position: 'relative',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        zIndex: 99999,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center'
       }}>
         <div style={{
-          position: 'absolute',
-          top: '25%',
-          left: '50%',
-          transform: 'translateX(-50%)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -327,7 +355,13 @@ function CheckoutIframeContent() {
           sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation allow-modals allow-presentation"
           referrerPolicy="no-referrer-when-downgrade"
           onLoad={() => {
-            // Hide overlay quickly after iframe loads
+            // Remove immediate overlay if it exists
+            const immediateOverlay = document.getElementById('loading-overlay-immediate');
+            if (immediateOverlay) {
+              immediateOverlay.remove();
+            }
+            
+            // Hide React overlay quickly after iframe loads
             setTimeout(() => {
               setIframeLoading(false);
             }, 100);
@@ -355,7 +389,7 @@ function CheckoutIframeContent() {
         />
       </div>
       
-      {/* Overlay with logo - shown while iframe is loading */}
+      {/* Overlay with logo - shown while iframe is loading - ALWAYS visible until iframe loads */}
       {iframeLoading && (
         <div style={{
           position: 'fixed',
@@ -364,7 +398,7 @@ function CheckoutIframeContent() {
           width: '100%',
           height: '100%',
           backgroundColor: '#ffffff',
-          zIndex: 9999,
+          zIndex: 99999,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -442,7 +476,57 @@ function CheckoutIframeContent() {
 
 export default function CheckoutIframePage() {
   return (
-    <Suspense fallback={
+    <>
+      {/* Blocking script to inject overlay IMMEDIATELY before React loads */}
+      <Script
+        id="inject-overlay-immediate"
+        strategy="beforeInteractive"
+        dangerouslySetInnerHTML={{
+          __html: `
+            (function() {
+              // Prevent white screen - inject overlay immediately
+              if (typeof document !== 'undefined') {
+                // Set body background immediately
+                document.body.style.cssText = 'background-color: #ffffff; margin: 0; padding: 0; overflow: hidden;';
+                document.documentElement.style.cssText = 'background-color: #ffffff; margin: 0; padding: 0; overflow: hidden;';
+                
+                // Create overlay immediately
+                if (!document.getElementById('loading-overlay-immediate')) {
+                  const overlay = document.createElement('div');
+                  overlay.id = 'loading-overlay-immediate';
+                  overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #ffffff; z-index: 99999; display: flex; align-items: center; justify-content: center; pointer-events: none;';
+                  
+                  const logoContainer = document.createElement('div');
+                  logoContainer.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 20px;';
+                  
+                  const logo = document.createElement('img');
+                  logo.src = '/cashfree-logo.png';
+                  logo.alt = 'Cashfree Payments';
+                  logo.style.cssText = 'width: 100px; height: 30px; object-fit: contain; display: block;';
+                  logo.onerror = function() { this.style.display = 'none'; };
+                  
+                  const spinner = document.createElement('div');
+                  spinner.style.cssText = 'width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #0070f3; border-radius: 50%; animation: spin 0.8s linear infinite;';
+                  
+                  // Add spinner animation
+                  if (!document.getElementById('spinner-style')) {
+                    const style = document.createElement('style');
+                    style.id = 'spinner-style';
+                    style.textContent = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
+                    document.head.appendChild(style);
+                  }
+                  
+                  logoContainer.appendChild(logo);
+                  logoContainer.appendChild(spinner);
+                  overlay.appendChild(logoContainer);
+                  document.body.appendChild(overlay);
+                }
+              }
+            })();
+          `,
+        }}
+      />
+      <Suspense fallback={
       <div style={{
         width: '100%',
         height: '100vh',
@@ -450,16 +534,15 @@ export default function CheckoutIframePage() {
         padding: 0,
         overflow: 'hidden',
         backgroundColor: '#ffffff',
-        position: 'relative',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        zIndex: 99999,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center'
       }}>
         <div style={{
-          position: 'absolute',
-          top: '25%',
-          left: '50%',
-          transform: 'translateX(-50%)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -498,6 +581,7 @@ export default function CheckoutIframePage() {
     }>
       <CheckoutIframeContent />
     </Suspense>
+    </>
   );
 }
 
