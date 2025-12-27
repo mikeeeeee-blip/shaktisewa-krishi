@@ -107,15 +107,15 @@ function CheckoutIframeContent() {
     dnsPrefetch.href = 'https://api.cashfree.com';
     document.head.appendChild(dnsPrefetch);
 
+    let preloadLink: HTMLLinkElement | null = null;
+    let prefetchLink: HTMLLinkElement | null = null;
+    let dnsPrefetchApi: HTMLLinkElement | null = null;
+
     // DNS prefetch for our own API endpoint
     dnsPrefetchApi = document.createElement('link');
     dnsPrefetchApi.rel = 'dns-prefetch';
     dnsPrefetchApi.href = window.location.origin;
     document.head.appendChild(dnsPrefetchApi);
-
-    let preloadLink: HTMLLinkElement | null = null;
-    let prefetchLink: HTMLLinkElement | null = null;
-    let dnsPrefetchApi: HTMLLinkElement | null = null;
 
     // Preload checkout page immediately if URL is ready (use preload instead of prefetch for higher priority)
     if (upiUrl) {
