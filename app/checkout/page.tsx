@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Script from 'next/script';
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
@@ -27,6 +28,38 @@ function CheckoutContent() {
     const html = document.documentElement;
     body.style.cssText = 'background-color: #ffffff; margin: 0; padding: 0; overflow: hidden;';
     html.style.cssText = 'background-color: #ffffff; margin: 0; padding: 0; overflow: hidden;';
+    
+    // Create overlay immediately if it doesn't exist (before React renders)
+    if (!document.getElementById('loading-overlay-immediate')) {
+      const overlay = document.createElement('div');
+      overlay.id = 'loading-overlay-immediate';
+      overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #ffffff; z-index: 99999; display: flex; align-items: center; justify-content: center; pointer-events: none;';
+      
+      const logoContainer = document.createElement('div');
+      logoContainer.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 20px;';
+      
+      const logo = document.createElement('img');
+      logo.src = '/cashfree-logo.png';
+      logo.alt = 'Cashfree Payments';
+      logo.style.cssText = 'width: 100px; height: 50px; object-fit: contain; display: block;';
+      logo.onerror = function() { this.style.display = 'none'; };
+      
+      const spinner = document.createElement('div');
+      spinner.style.cssText = 'width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #0070f3; border-radius: 50%; animation: spin 0.8s linear infinite;';
+      
+      // Add spinner animation
+      if (!document.getElementById('spinner-style')) {
+        const style = document.createElement('style');
+        style.id = 'spinner-style';
+        style.textContent = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
+        document.head.appendChild(style);
+      }
+      
+      logoContainer.appendChild(logo);
+      logoContainer.appendChild(spinner);
+      overlay.appendChild(logoContainer);
+      document.body.appendChild(overlay);
+    }
 
     // Add resource hints for Cashfree (critical for fast loading)
     if (!document.querySelector('link[href="https://sdk.cashfree.com"]')) {
@@ -665,137 +698,52 @@ function CheckoutContent() {
   }, []);
 
   useEffect(() => {
-    // Open Cashfree checkout once session ID is ready and SDK is loaded
+    // Redirect directly to Cashfree checkout once session ID is ready
     if (!paymentSessionId) return;
 
-    let checkSDKInterval: NodeJS.Timeout | null = null;
-    let timeoutId: NodeJS.Timeout | null = null;
-    let mutationObserver: MutationObserver | null = null;
+    try {
+      const exactPaymentSessionId = paymentSessionId.trim();
 
-    const initializeCashfreeCheckout = () => {
-      if (typeof window !== 'undefined' && (window as any).Cashfree) {
-        try {
-          const exactPaymentSessionId = paymentSessionId.trim();
+      if (!exactPaymentSessionId.startsWith('session_')) {
+        setError('Invalid payment session ID format. Please try again.');
+        setLoading(false);
+        return;
+      }
 
-          if (!exactPaymentSessionId.startsWith('session_')) {
-            setError('Invalid payment session ID format. Please try again.');
-            return;
-          }
+      // Determine the correct Cashfree checkout URL based on environment
+      const baseUrl = environment === 'production' 
+        ? 'https://payments.cashfree.com'
+        : 'https://sandbox.cashfree.com';
+      
+      const checkoutUrl = `${baseUrl}/order/#${exactPaymentSessionId}`;
 
-          console.log('Initializing Cashfree checkout:', {
-            mode: environment,
-            paymentSessionIdLength: exactPaymentSessionId.length,
-            paymentSessionIdPreview: exactPaymentSessionId.substring(0, 50) + '...',
-            paymentSessionIdFull: exactPaymentSessionId,
-            startsWithSession: exactPaymentSessionId.startsWith('session_'),
-            validCharacters: /^[a-zA-Z0-9_-]+$/.test(exactPaymentSessionId),
-          });
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Redirecting to Cashfree checkout:', {
+          url: checkoutUrl,
+          environment,
+          sessionIdLength: exactPaymentSessionId.length
+        });
+      }
 
-          const cashfree = (window as any).Cashfree({
-            mode: environment
-          });
-
-          console.log('Opening Cashfree checkout with paymentSessionId:', exactPaymentSessionId);
-
-          // Open Cashfree checkout using SDK
-          const checkoutOptions = {
-            paymentSessionId: exactPaymentSessionId,
-            redirectTarget: '_self' as const
-          };
-
-          console.log('Checkout options being sent:', {
-            paymentSessionId: exactPaymentSessionId.substring(0, 50) + '...',
-            redirectTarget: checkoutOptions.redirectTarget,
-          });
-
-          cashfree.checkout(checkoutOptions)
-            .then(() => {
-              console.log('✅ Cashfree checkout opened successfully');
-              // Auto-click UPI button after checkout opens
-              // Multiple attempts with increasing delays to catch modal at different render stages
-              setTimeout(() => autoClickUPIButton(), 500);
-              setTimeout(() => autoClickUPIButton(), 1500);
-              setTimeout(() => autoClickUPIButton(), 3000);
-            })
-            .catch((checkoutError: any) => {
-              console.error('❌ Cashfree checkout error:', checkoutError);
-              const errorMessage = checkoutError?.message || checkoutError?.error?.message || checkoutError?.code || 'Unknown error from Cashfree';
-              const errorCode = checkoutError?.code || checkoutError?.error?.code;
-              const errorType = checkoutError?.type || checkoutError?.error?.type;
-              
-              console.error('Error details:', {
-                message: errorMessage,
-                code: errorCode,
-                type: errorType,
-                fullError: checkoutError,
-                sessionIdLength: exactPaymentSessionId.length,
-                sessionIdPreview: exactPaymentSessionId.substring(0, 50)
-              });
-              
-              // If SDK checkout fails, try direct URL redirect as fallback
-              if (errorCode === 'payment_session_id_invalid' || errorMessage.includes('payment_session_id') || errorCode === 'payment_session_id_invalid') {
-                console.log('⚠️ SDK checkout failed, trying direct URL redirect as fallback...');
-                const fallbackUrl = `https://payments.cashfree.com/order/#${exactPaymentSessionId}`;
-                console.log('Fallback URL:', fallbackUrl);
-                window.location.replace(fallbackUrl);
-              } else {
-                // Show user-friendly error message for other errors
-                setError(`Payment initialization failed: ${errorMessage}. Please try again or contact support.`);
-              }
-          });
-        } catch (error: any) {
-          console.error('Error opening Cashfree checkout:', error);
-          setError(`Failed to initialize payment: ${error.message || 'Unknown error'}`);
+      // Keep overlay visible during redirect - redirect after a brief moment to ensure overlay is shown
+      setTimeout(() => {
+        // Remove immediate overlay if it exists
+        const immediateOverlay = document.getElementById('loading-overlay-immediate');
+        if (immediateOverlay) {
+          immediateOverlay.remove();
         }
-      } else {
-        // SDK not loaded yet, wait and retry (reduced since SDK is preloaded in layout)
-        console.log('Cashfree SDK not loaded yet, waiting...');
-        let retryCount = 0;
-        const maxRetries = 15; // 3 seconds total (15 * 200ms) - reduced since SDK is preloaded
-
-        checkSDKInterval = setInterval(() => {
-          retryCount++;
-          if ((window as any).Cashfree) {
-            if (checkSDKInterval) clearInterval(checkSDKInterval);
-            initializeCashfreeCheckout();
-          } else if (retryCount >= maxRetries) {
-            if (checkSDKInterval) clearInterval(checkSDKInterval);
-            setError('Cashfree payment SDK failed to load. Please refresh the page and try again.');
-          }
-        }, 100); // Reduced to 100ms for faster checking
-      }
-      };
-
-      // Set up MutationObserver to watch for DOM changes (when checkout modal appears)
-      try {
-        mutationObserver = new MutationObserver(() => {
-          // When DOM changes, try to click UPI button
-          autoClickUPIButton();
-        });
-
-        mutationObserver.observe(document.body, {
-          childList: true,
-          subtree: true,
-          attributes: true,
-          attributeFilter: ['class', 'id', 'style']
-        });
-      } catch (e) {
-        // Silent fail if MutationObserver not supported
-      }
-
-      // Wait a bit for SDK to load (reduced to 100ms for faster loading)
-    timeoutId = setTimeout(() => {
-      initializeCashfreeCheckout();
-      }, 200);
-
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      if (checkSDKInterval) clearInterval(checkSDKInterval);
-        if (mutationObserver) mutationObserver.disconnect();
-    };
+        
+        // Redirect to Cashfree checkout page
+        window.location.replace(checkoutUrl);
+      }, 100); // Small delay to ensure overlay is visible
+    } catch (error: any) {
+      console.error('Error redirecting to Cashfree checkout:', error);
+      setError(`Failed to redirect to payment page: ${error.message || 'Unknown error'}`);
+      setLoading(false);
+    }
   }, [paymentSessionId, environment]);
 
-  // Show Cashfree logo on white background while loading
+  // Show Cashfree logo on white background while loading - ALWAYS visible
     return (
     <div style={{ 
       position: 'fixed', 
@@ -806,7 +754,7 @@ function CheckoutContent() {
       backgroundColor: '#ffffff',
       margin: 0,
       padding: 0,
-      zIndex: 9999,
+      zIndex: 99999,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -816,10 +764,15 @@ function CheckoutContent() {
       <img 
         src="/cashfree-logo.png" 
         alt="Cashfree Payments" 
+        loading="eager"
         style={{
           width: '100px',
           height: '50px',
-          objectFit: 'contain'
+          objectFit: 'contain',
+          display: 'block'
+        }}
+        onError={(e) => {
+          (e.target as HTMLImageElement).style.display = 'none';
         }}
       />
       {loading && (
@@ -832,14 +785,14 @@ function CheckoutContent() {
           fontFamily: 'system-ui, -apple-system, sans-serif'
         }}>
           <div style={{
-            width: '16px',
-            height: '16px',
+            width: '20px',
+            height: '20px',
             border: '2px solid #f3f3f3',
             borderTop: '2px solid #0070f3',
             borderRadius: '50%',
-            animation: 'spin 1s linear infinite'
+            animation: 'spin 0.8s linear infinite'
           }} />
-          <span>Loading payment gateway...</span>
+          <span>Redirecting to payment gateway...</span>
         </div>
       )}
       {error && (
@@ -952,33 +905,105 @@ function CheckoutContent() {
 
 export default function CheckoutPage() {
   return (
-    <Suspense fallback={
-      <div style={{ 
-        position: 'fixed', 
-        top: 0, 
-        left: 0, 
-        width: '100%', 
-        height: '100%', 
-        backgroundColor: '#ffffff',
-        margin: 0,
-        padding: 0,
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        <img 
-          src="/cashfree-logo.png" 
-          alt="Cashfree Payments" 
-          style={{
-            width: '100px',
-            height: '50px',
-            objectFit: 'contain'
-          }}
-        />
-      </div>
-    }>
-      <CheckoutContent />
-    </Suspense>
+    <>
+      {/* Blocking script to inject overlay IMMEDIATELY before React loads */}
+      <Script
+        id="inject-overlay-immediate"
+        strategy="beforeInteractive"
+        dangerouslySetInnerHTML={{
+          __html: `
+            (function() {
+              // Prevent white screen - inject overlay immediately
+              if (typeof document !== 'undefined') {
+                // Set body background immediately
+                document.body.style.cssText = 'background-color: #ffffff; margin: 0; padding: 0; overflow: hidden;';
+                document.documentElement.style.cssText = 'background-color: #ffffff; margin: 0; padding: 0; overflow: hidden;';
+                
+                // Create overlay immediately
+                if (!document.getElementById('loading-overlay-immediate')) {
+                  const overlay = document.createElement('div');
+                  overlay.id = 'loading-overlay-immediate';
+                  overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #ffffff; z-index: 99999; display: flex; align-items: center; justify-content: center; pointer-events: none;';
+                  
+                  const logoContainer = document.createElement('div');
+                  logoContainer.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 20px;';
+                  
+                  const logo = document.createElement('img');
+                  logo.src = '/cashfree-logo.png';
+                  logo.alt = 'Cashfree Payments';
+                  logo.style.cssText = 'width: 100px; height: 50px; object-fit: contain; display: block;';
+                  logo.onerror = function() { this.style.display = 'none'; };
+                  
+                  const spinner = document.createElement('div');
+                  spinner.style.cssText = 'width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #0070f3; border-radius: 50%; animation: spin 0.8s linear infinite;';
+                  
+                  // Add spinner animation
+                  if (!document.getElementById('spinner-style')) {
+                    const style = document.createElement('style');
+                    style.id = 'spinner-style';
+                    style.textContent = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
+                    document.head.appendChild(style);
+                  }
+                  
+                  logoContainer.appendChild(logo);
+                  logoContainer.appendChild(spinner);
+                  overlay.appendChild(logoContainer);
+                  document.body.appendChild(overlay);
+                }
+              }
+            })();
+          `,
+        }}
+      />
+      <Suspense fallback={
+        <div style={{ 
+          position: 'fixed', 
+          top: 0, 
+          left: 0, 
+          width: '100%', 
+          height: '100%', 
+          backgroundColor: '#ffffff',
+          margin: 0,
+          padding: 0,
+          zIndex: 99999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'column',
+          gap: '20px'
+        }}>
+          <img 
+            src="/cashfree-logo.png" 
+            alt="Cashfree Payments" 
+            loading="eager"
+            style={{
+              width: '100px',
+              height: '50px',
+              objectFit: 'contain',
+              display: 'block'
+            }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
+          />
+          <div style={{
+            width: '20px',
+            height: '20px',
+            border: '2px solid #f3f3f3',
+            borderTop: '2px solid #0070f3',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite'
+          }} />
+          <style jsx>{`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}</style>
+        </div>
+      }>
+        <CheckoutContent />
+      </Suspense>
+    </>
   );
 }
