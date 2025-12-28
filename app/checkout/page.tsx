@@ -10,6 +10,287 @@ function CheckoutContent() {
   const [paymentSessionId, setPaymentSessionId] = useState<string | null>(null);
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('sandbox');
 
+  /**
+   * UPI Intent Support for Cashfree Checkout
+   * 
+   * This implementation follows Cashfree's documentation for UPI Intent support:
+   * https://www.cashfree.com/docs/payments/online/mobile/misc/upi_intent_support_js_sdk
+   * 
+   * It intercepts UPI intent URLs (upi://pay, tez://, gpay://, paytmmp://, phonepe://)
+   * and opens them directly to launch UPI apps on mobile devices.
+   * 
+   * For webview contexts (Android/React Native), the native app should also implement
+   * shouldOverrideUrlLoading/onShouldStartLoadWithRequest to handle UPI URLs.
+   */
+  
+  // UPI Intent URL patterns to intercept (as per Cashfree docs)
+  const UPI_INTENT_PATTERNS = [
+    'upi://pay',
+    'tez://',
+    'gpay://',
+    'paytmmp://',
+    'phonepe://'
+  ];
+
+  // Function to check if URL is a UPI intent
+  const isUPIIntentUrl = (url: string): boolean => {
+    if (!url) return false;
+    return UPI_INTENT_PATTERNS.some(pattern => url.toLowerCase().startsWith(pattern.toLowerCase()));
+  };
+
+  // Function to open UPI intent URL
+  // Supports both web and webview contexts
+  const openUPIIntent = (url: string): void => {
+    try {
+      console.log('🔗 Opening UPI Intent URL:', url);
+      
+      // Method 1: Try Android JS Bridge (for React Native/Android webview)
+      if (typeof window !== 'undefined' && (window as any).Android && typeof (window as any).Android.openUPIApp === 'function') {
+        console.log('📱 Using Android JS Bridge to open UPI app');
+        (window as any).Android.openUPIApp(url);
+        return;
+      }
+
+      // Method 2: Try direct window.location (for web contexts)
+      // Create a temporary link and click it
+      const link = document.createElement('a');
+      link.href = url;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      console.log('✅ UPI Intent URL opened via link click');
+    } catch (error) {
+      console.error('❌ Error opening UPI Intent URL:', error);
+      // Fallback: try window.location
+      try {
+        window.location.href = url;
+      } catch (fallbackError) {
+        console.error('❌ Fallback also failed:', fallbackError);
+      }
+    }
+  };
+
+  // Set up UPI Intent interception - Comprehensive solution for web and webview
+  useEffect(() => {
+    console.log('🔧 Setting up UPI Intent interception...');
+
+    // Intercept link clicks (capture phase to catch early)
+    const handleLinkClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const link = target.closest('a');
+      if (link && link.href) {
+        const url = link.href;
+        if (isUPIIntentUrl(url)) {
+          console.log('🛑 Intercepted UPI link click:', url);
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          openUPIIntent(url);
+          return false;
+        }
+      }
+      
+      // Also check for buttons/divs with onclick or data attributes
+      const element = target as HTMLElement;
+      const onclickAttr = element.getAttribute('onclick');
+      if (onclickAttr && isUPIIntentUrl(onclickAttr)) {
+        console.log('🛑 Intercepted UPI onclick:', onclickAttr);
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        openUPIIntent(onclickAttr);
+        return false;
+      }
+    };
+
+    // Watch for dynamically added elements with UPI URLs
+    const handleIframeNavigation = () => {
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === 1) { // Element node
+              const element = node as HTMLElement;
+              
+              // Check if it's an iframe
+              if (element.tagName === 'IFRAME') {
+                const iframe = element as HTMLIFrameElement;
+                if (iframe.src && isUPIIntentUrl(iframe.src)) {
+                  console.log('🛑 Intercepted UPI iframe src:', iframe.src);
+                  openUPIIntent(iframe.src);
+                }
+                
+                // Also watch for iframe content changes (if same-origin)
+                try {
+                  iframe.addEventListener('load', () => {
+                    try {
+                      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+                      if (iframeDoc) {
+                        const iframeLinks = iframeDoc.querySelectorAll('a[href]');
+                        iframeLinks.forEach((link) => {
+                          const href = (link as HTMLAnchorElement).href;
+                          if (isUPIIntentUrl(href)) {
+                            link.addEventListener('click', (e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              openUPIIntent(href);
+                            });
+                          }
+                        });
+                      }
+                    } catch (e) {
+                      // Cross-origin iframe, can't access content
+                    }
+                  });
+                } catch (e) {
+                  // Ignore cross-origin errors
+                }
+              }
+              
+              // Check for links inside added elements
+              const links = element.querySelectorAll('a[href]');
+              links.forEach((link) => {
+                const href = (link as HTMLAnchorElement).href;
+                if (isUPIIntentUrl(href)) {
+                  link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openUPIIntent(href);
+                  }, true);
+                }
+              });
+
+              // Check for buttons/divs with onclick
+              const clickableElements = element.querySelectorAll('[onclick], [data-href], button, div[role="button"]');
+              clickableElements.forEach((el) => {
+                const onclick = el.getAttribute('onclick');
+                const dataHref = el.getAttribute('data-href');
+                if (onclick && isUPIIntentUrl(onclick)) {
+                  el.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openUPIIntent(onclick);
+                  }, true);
+                }
+                if (dataHref && isUPIIntentUrl(dataHref)) {
+                  el.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openUPIIntent(dataHref);
+                  }, true);
+                }
+              });
+            }
+          });
+        });
+      });
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['href', 'onclick', 'data-href']
+      });
+
+      return () => observer.disconnect();
+    };
+
+    // Intercept window.location changes
+    const originalLocationReplace = window.location.replace;
+    const originalLocationAssign = window.location.assign;
+    const originalLocationHrefSetter = Object.getOwnPropertyDescriptor(window.location, 'href')?.set;
+    
+    // Override location.replace
+    window.location.replace = function(url: string | URL) {
+      const urlString = typeof url === 'string' ? url : url.toString();
+      if (isUPIIntentUrl(urlString)) {
+        console.log('🛑 Intercepted location.replace with UPI URL:', urlString);
+        openUPIIntent(urlString);
+        return;
+      }
+      return originalLocationReplace.call(window.location, url);
+    };
+
+    // Override location.assign
+    window.location.assign = function(url: string | URL) {
+      const urlString = typeof url === 'string' ? url : url.toString();
+      if (isUPIIntentUrl(urlString)) {
+        console.log('🛑 Intercepted location.assign with UPI URL:', urlString);
+        openUPIIntent(urlString);
+        return;
+      }
+      return originalLocationAssign.call(window.location, url);
+    };
+
+    // Override location.href setter
+    if (originalLocationHrefSetter) {
+      Object.defineProperty(window.location, 'href', {
+        set: function(url: string) {
+          if (isUPIIntentUrl(url)) {
+            console.log('🛑 Intercepted location.href setter with UPI URL:', url);
+            openUPIIntent(url);
+            return;
+          }
+          originalLocationHrefSetter.call(window.location, url);
+        },
+        get: function() {
+          return window.location.href;
+        },
+        configurable: true
+      });
+    }
+
+    // Intercept beforeunload/navigation attempts
+    window.addEventListener('beforeunload', (e) => {
+      // This won't catch UPI URLs but helps with debugging
+    });
+
+    // Add click listener (capture phase to intercept early)
+    document.addEventListener('click', handleLinkClick, true);
+
+    // Set up mutation observer for dynamic content
+    const observerCleanup = handleIframeNavigation();
+
+    // Also check existing links on page load
+    const checkExistingLinks = () => {
+      const allLinks = document.querySelectorAll('a[href]');
+      allLinks.forEach((link) => {
+        const href = (link as HTMLAnchorElement).href;
+        if (isUPIIntentUrl(href)) {
+          link.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openUPIIntent(href);
+          }, true);
+        }
+      });
+    };
+
+    // Check immediately and after a delay (for Cashfree checkout to load)
+    checkExistingLinks();
+    const checkInterval = setInterval(checkExistingLinks, 1000);
+    setTimeout(() => clearInterval(checkInterval), 30000); // Stop after 30 seconds
+
+    console.log('✅ UPI Intent interception set up successfully');
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('click', handleLinkClick, true);
+      if (observerCleanup) observerCleanup();
+      clearInterval(checkInterval);
+      window.location.replace = originalLocationReplace;
+      window.location.assign = originalLocationAssign;
+      if (originalLocationHrefSetter) {
+        Object.defineProperty(window.location, 'href', {
+          set: originalLocationHrefSetter,
+          get: () => window.location.href,
+          configurable: true
+        });
+      }
+    };
+  }, []);
+
   // Set white background and load Cashfree SDK on mount
   useEffect(() => {
     // Clear document title
@@ -46,6 +327,26 @@ function CheckoutContent() {
       script.async = true;
       script.defer = true;
       document.head.appendChild(script);
+    }
+
+    // Register Android JS Bridge for UPI Intent (if in Android/React Native webview)
+    // This follows Cashfree's code-based solution for webview contexts
+    if (typeof window !== 'undefined') {
+      // Expose function for native app to call via JS bridge
+      (window as any).handleUPIIntent = (url: string) => {
+        if (isUPIIntentUrl(url)) {
+          openUPIIntent(url);
+        }
+      };
+
+      // Check if Android bridge exists (for React Native/Android webview)
+      // The native app should register a bridge named "Android" with openUPIApp method
+      if ((window as any).Android) {
+        console.log('📱 Android JS Bridge detected - UPI Intent support enabled');
+        // Native app can call: Android.openUPIApp(url) to open UPI apps
+      } else {
+        console.log('🌐 Running in web context - using link-based UPI Intent handling');
+      }
     }
   }, []);
 
