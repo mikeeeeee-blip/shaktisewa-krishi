@@ -196,50 +196,9 @@ function CheckoutContent() {
       return () => observer.disconnect();
     };
 
-    // Intercept window.location changes
-    const originalLocationReplace = window.location.replace;
-    const originalLocationAssign = window.location.assign;
-    const originalLocationHrefSetter = Object.getOwnPropertyDescriptor(window.location, 'href')?.set;
-    
-    // Override location.replace
-    window.location.replace = function(url: string | URL) {
-      const urlString = typeof url === 'string' ? url : url.toString();
-      if (isUPIIntentUrl(urlString)) {
-        console.log('🛑 Intercepted location.replace with UPI URL:', urlString);
-        openUPIIntent(urlString);
-        return;
-      }
-      return originalLocationReplace.call(window.location, url);
-    };
-
-    // Override location.assign
-    window.location.assign = function(url: string | URL) {
-      const urlString = typeof url === 'string' ? url : url.toString();
-      if (isUPIIntentUrl(urlString)) {
-        console.log('🛑 Intercepted location.assign with UPI URL:', urlString);
-        openUPIIntent(urlString);
-        return;
-      }
-      return originalLocationAssign.call(window.location, url);
-    };
-
-    // Override location.href setter
-    if (originalLocationHrefSetter) {
-      Object.defineProperty(window.location, 'href', {
-        set: function(url: string) {
-          if (isUPIIntentUrl(url)) {
-            console.log('🛑 Intercepted location.href setter with UPI URL:', url);
-            openUPIIntent(url);
-            return;
-          }
-          originalLocationHrefSetter.call(window.location, url);
-        },
-        get: function() {
-          return window.location.href;
-        },
-        configurable: true
-      });
-    }
+    // Note: window.location.replace and window.location.assign are read-only properties
+    // and cannot be overridden in modern browsers. We rely on click interception and
+    // MutationObserver to catch UPI intent URLs from links and buttons instead.
 
     // Intercept beforeunload/navigation attempts
     window.addEventListener('beforeunload', (e) => {
@@ -279,15 +238,8 @@ function CheckoutContent() {
       document.removeEventListener('click', handleLinkClick, true);
       if (observerCleanup) observerCleanup();
       clearInterval(checkInterval);
-      window.location.replace = originalLocationReplace;
-      window.location.assign = originalLocationAssign;
-      if (originalLocationHrefSetter) {
-        Object.defineProperty(window.location, 'href', {
-          set: originalLocationHrefSetter,
-          get: () => window.location.href,
-          configurable: true
-        });
-      }
+      // Note: We don't need to restore location methods as we didn't override them
+      // The proxy will be garbage collected when component unmounts
     };
   }, []);
 
