@@ -10,54 +10,41 @@ function CheckoutContent() {
   const [paymentSessionId, setPaymentSessionId] = useState<string | null>(null);
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('sandbox');
 
-  // Optimized: Set white background and preload Cashfree SDK
+  // Set white background and load Cashfree SDK on mount
   useEffect(() => {
-    // Batch DOM operations for better performance
-    if (typeof document === 'undefined') return;
-
-    // Clear document title and icons
+    // Clear document title
     document.title = '';
-    const existingFavicon = document.querySelector("link[rel='icon']");
-    if (existingFavicon) existingFavicon.remove();
-    const existingAppleIcon = document.querySelector("link[rel='apple-touch-icon']");
-    if (existingAppleIcon) existingAppleIcon.remove();
     
-    // Batch style updates
-    const body = document.body;
-    const html = document.documentElement;
-    body.style.cssText = 'background-color: #ffffff; margin: 0; padding: 0; overflow: hidden;';
-    html.style.cssText = 'background-color: #ffffff; margin: 0; padding: 0; overflow: hidden;';
-
-    // Add resource hints for Cashfree (critical for fast loading)
-    if (!document.querySelector('link[href="https://sdk.cashfree.com"]')) {
-      const preconnect = document.createElement('link');
-      preconnect.rel = 'preconnect';
-      preconnect.href = 'https://sdk.cashfree.com';
-      preconnect.crossOrigin = 'anonymous';
-      document.head.appendChild(preconnect);
+    // Remove existing favicon
+    const existingFavicon = document.querySelector("link[rel='icon']");
+    if (existingFavicon) {
+      existingFavicon.remove();
     }
-
-    if (!document.querySelector('link[href="https://payments.cashfree.com"]')) {
-      const preconnectPayments = document.createElement('link');
-      preconnectPayments.rel = 'preconnect';
-      preconnectPayments.href = 'https://payments.cashfree.com';
-      preconnectPayments.crossOrigin = 'anonymous';
-      document.head.appendChild(preconnectPayments);
+    
+    // Remove apple-touch-icon
+    const existingAppleIcon = document.querySelector("link[rel='apple-touch-icon']");
+    if (existingAppleIcon) {
+      existingAppleIcon.remove();
     }
+    
+    // Set body and html background to white
+    document.body.style.backgroundColor = '#ffffff';
+    document.body.style.margin = '0';
+    document.body.style.padding = '0';
+    document.documentElement.style.backgroundColor = '#ffffff';
+    document.documentElement.style.margin = '0';
+    document.documentElement.style.padding = '0';
+    
+    // Remove any overflow
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
 
-    // Preload Cashfree SDK immediately for faster loading
+    // Preload Cashfree SDK for faster loading
     if (typeof window !== 'undefined' && !(window as any).Cashfree) {
       const script = document.createElement('script');
       script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
       script.async = true;
       script.defer = true;
-      script.crossOrigin = 'anonymous';
-      // Add preload link for even faster loading
-      const preload = document.createElement('link');
-      preload.rel = 'preload';
-      preload.as = 'script';
-      preload.href = 'https://sdk.cashfree.com/js/v3/cashfree.js';
-      document.head.appendChild(preload);
       document.head.appendChild(script);
     }
   }, []);
@@ -117,22 +104,20 @@ function CheckoutContent() {
     const createCashfreeSession = async () => {
       try {
         setLoading(true);
-        if (process.env.NODE_ENV === 'development') {
-          console.log('Creating Cashfree payment session with data:', paymentData);
-        }
+        console.log('Creating Cashfree payment session with data:', paymentData);
 
-        // Optimized: Reduced timeout for faster failure detection
+        // Call Next.js API route to create Cashfree session with timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
         try {
-        const response = await fetch('/api/payments/create-session', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          const response = await fetch('/api/payments/create-session', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
             signal: controller.signal,
-          body: JSON.stringify({
+            body: JSON.stringify({
             orderId: paymentData.order_id,
             orderAmount: paymentData.amount,
             transactionId: paymentData.transaction_id, // Include transaction_id for callback
@@ -167,9 +152,7 @@ function CheckoutContent() {
         clearTimeout(timeoutId);
         const result = await response.json();
         
-        if (process.env.NODE_ENV === 'development') {
-          console.log('API Response:', JSON.stringify(result, null, 2));
-        }
+        console.log('API Response:', JSON.stringify(result, null, 2));
 
         if (!result.success) {
           const errorMsg = result.message || result.details || 'Failed to create payment session';
@@ -188,17 +171,14 @@ function CheckoutContent() {
         // Clean the session ID - only trim whitespace, preserve all characters
         const cleanSessionId = String(sessionId).trim();
         
-        // Log session ID details for debugging (development only)
-        if (process.env.NODE_ENV === 'development') {
-          console.log('✅ Payment Session ID received:', {
-            length: cleanSessionId.length,
-            startsWithSession: cleanSessionId.startsWith('session_'),
-            preview: cleanSessionId.substring(0, 50) + '...',
-            environment: result.data?.environment,
-            orderId: result.data?.orderId,
-            cfOrderId: result.data?.cfOrderId
-          });
-        }
+        // Log session ID details for debugging
+        console.log('✅ Payment Session ID received:');
+        console.log('   - Length:', cleanSessionId.length);
+        console.log('   - Starts with session_:', cleanSessionId.startsWith('session_'));
+        console.log('   - Preview:', cleanSessionId.substring(0, 50) + '...');
+        console.log('   - Environment from API:', result.data?.environment);
+        console.log('   - Order ID:', result.data?.orderId);
+        console.log('   - CF Order ID:', result.data?.cfOrderId);
         
         if (!cleanSessionId || !cleanSessionId.startsWith('session_')) {
           console.error('Invalid payment session ID format:', cleanSessionId.substring(0, 50));
@@ -212,19 +192,19 @@ function CheckoutContent() {
           : environment;
         
         if (apiEnvironment && apiEnvironment !== environment) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('⚠️ Environment mismatch - using API environment:', apiEnvironment);
-          }
+          console.log('⚠️ Environment mismatch detected:');
+          console.log('  URL environment:', environment);
+          console.log('  API environment:', apiEnvironment);
+          console.log('  Using API environment (credentials used to create session):', apiEnvironment);
           setEnvironment(apiEnvironment);
         }
 
-        if (process.env.NODE_ENV === 'development') {
-          console.log('✅ Payment session created:', {
-            sessionIdLength: cleanSessionId.length,
-            preview: cleanSessionId.substring(0, 50) + '...',
-            environment: finalEnvironment
-          });
-        }
+        console.log('Payment session created successfully:');
+        console.log('  Session ID length:', cleanSessionId.length);
+        console.log('  Session ID preview:', cleanSessionId.substring(0, 50) + '...');
+        console.log('  Full session ID:', cleanSessionId);
+        console.log('  Environment (API):', apiEnvironment || 'not provided');
+        console.log('  Environment (final):', finalEnvironment);
         
         // Set both session ID and ensure environment is correct
         setPaymentSessionId(cleanSessionId);
@@ -239,430 +219,15 @@ function CheckoutContent() {
         }
         throw fetchError;
       }
-      } catch (err: any) {
-        console.error('Error creating payment session:', err);
-        setError(`Failed to create payment session: ${err.message || 'Unknown error'}`);
-        setLoading(false);
-      }
+    } catch (err: any) {
+      console.error('Error creating payment session:', err);
+      setError(`Failed to create payment session: ${err.message || 'Unknown error'}`);
+      setLoading(false);
+    }
     };
 
     createCashfreeSession();
   }, [paymentData, error]);
-
-  // Optimized: Faster auto-click with reduced attempts
-  const autoClickUPIButton = () => {
-    try {
-      const MAX_ATTEMPTS = 100; // 10 seconds total (100 * 100ms) - faster
-      const TIMEOUT = 10000; // 10 seconds timeout
-      let attempts = 0;
-      let found = false;
-
-      const findAndClickUPIButton = (doc: Document | ShadowRoot): boolean => {
-        try {
-          // Strategy 1: First, specifically look for "Pay by any UPI" button (highest priority)
-          const allElements = doc.querySelectorAll('*');
-          const payByAnyUPIElements: HTMLElement[] = [];
-          const otherUPIElements: HTMLElement[] = [];
-          
-          for (const element of Array.from(allElements)) {
-            const text = (element.textContent || '').toLowerCase().trim();
-            const htmlElement = element as HTMLElement;
-            
-            // Check if it's "Pay by any UPI" (highest priority)
-            if (text.includes('pay by any upi') || text === 'pay by any upi' || text.startsWith('pay by any upi')) {
-              const isClickable = element.tagName === 'BUTTON' || 
-                                  element.tagName === 'A' || 
-                                  element.tagName === 'DIV' ||
-                                  element.tagName === 'SPAN' ||
-                                  element.getAttribute('role') === 'button' ||
-                                  element.getAttribute('tabindex') !== null ||
-                                  htmlElement.onclick !== null ||
-                                  element.getAttribute('onclick') !== null;
-              
-              if (isClickable || element.tagName === 'DIV' || element.tagName === 'SPAN') {
-                payByAnyUPIElements.push(htmlElement);
-              }
-            }
-            // Check for other UPI options (lower priority)
-            else if (text.includes('pay by upi id') || 
-                     text.includes('pay by upi') || 
-                     text.includes('upi id') ||
-                     (text.includes('upi') && (text.includes('qr') || text.includes('id')))) {
-              const isClickable = element.tagName === 'BUTTON' || 
-                                  element.tagName === 'A' || 
-                                  element.tagName === 'DIV' ||
-                                  element.tagName === 'SPAN' ||
-                                  element.getAttribute('role') === 'button';
-              
-              if (isClickable || element.tagName === 'DIV' || element.tagName === 'SPAN') {
-                otherUPIElements.push(htmlElement);
-              }
-            }
-          }
-          
-          // Optimized: Faster clicking with instant scroll
-          for (const element of payByAnyUPIElements) {
-            try {
-              element.scrollIntoView({ behavior: 'auto', block: 'center' }); // 'auto' is faster than 'smooth'
-              element.click();
-              found = true;
-              if (process.env.NODE_ENV === 'development') {
-                console.log('✅ "Pay by any UPI" button clicked');
-              }
-              if (window.parent !== window) {
-                window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
-              }
-              return true;
-            } catch (e) {
-              try {
-                element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-                found = true;
-                if (window.parent !== window) {
-                  window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
-                }
-                return true;
-              } catch (e2) {
-                // Continue
-              }
-            }
-          }
-          
-          // Fallback: Try other UPI buttons
-          for (const element of otherUPIElements) {
-            try {
-              element.scrollIntoView({ behavior: 'auto', block: 'center' });
-              element.click();
-              found = true;
-              if (window.parent !== window) {
-                window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
-              }
-              return true;
-            } catch (e) {
-              try {
-                element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-                found = true;
-                if (window.parent !== window) {
-                  window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
-                }
-                return true;
-              } catch (e2) {
-                // Continue
-              }
-            }
-          }
-          
-          // Fallback: Try text matching for any UPI-related element
-          const textVariations = [
-            'Pay by any UPI', 'Pay by UPI ID / QR', 'Pay by UPI ID', 'Pay by UPI', 
-            'UPI ID / QR', 'UPI ID', 'UPI', 'upi id / qr', 'upi id', 
-            'pay by upi', 'pay by any upi', 'pay by any upi id',
-            'upi', 'UPI Payment', 'Pay via UPI', 'UPI Pay', 'Pay UPI', 'UPI Payment Method'
-          ];
-          
-          for (const element of Array.from(allElements)) {
-            const text = (element.textContent || '').toLowerCase().trim();
-            const matchesText = textVariations.some(variation => 
-              text.includes(variation.toLowerCase()) || 
-              text === variation.toLowerCase() ||
-              text.startsWith(variation.toLowerCase())
-            );
-            
-            if (matchesText) {
-              const htmlElement = element as HTMLElement;
-              const isClickable = element.tagName === 'BUTTON' || 
-                                  element.tagName === 'A' || 
-                                  element.tagName === 'DIV' ||
-                                  element.tagName === 'SPAN' ||
-                                  element.tagName === 'LI' ||
-                                  element.getAttribute('role') === 'button' ||
-                                  element.getAttribute('tabindex') !== null ||
-                                  htmlElement.onclick !== null ||
-                                  element.getAttribute('onclick') !== null ||
-                                  element.getAttribute('data-testid')?.includes('upi') ||
-                                  htmlElement.className?.toLowerCase().includes('upi') ||
-                                  htmlElement.id?.toLowerCase().includes('upi');
-              
-              if (isClickable || element.tagName === 'DIV' || element.tagName === 'SPAN') {
-                try {
-                  // Scroll element into view first
-                  (element as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  
-                  // Try multiple click methods
-                  (element as HTMLElement).click();
-                  found = true;
-                  console.log('✅ UPI button clicked successfully');
-                  
-                  // Notify parent if in iframe
-                  if (window.parent !== window) {
-                    window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
-                  }
-                  return true;
-                } catch (e) {
-                  try {
-                    // Try MouseEvent
-                    const clickEvent = new MouseEvent('click', {
-                      bubbles: true,
-                      cancelable: true,
-                      view: window,
-                      detail: 1
-                    });
-                    element.dispatchEvent(clickEvent);
-                    found = true;
-                    console.log('✅ UPI button clicked successfully (via MouseEvent)');
-                    if (window.parent !== window) {
-                      window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
-                    }
-                    return true;
-                  } catch (e2) {
-                    try {
-                      // Try mousedown + mouseup + click
-                      element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-                      element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-                      element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-                      found = true;
-                      console.log('✅ UPI button clicked successfully (via mousedown/mouseup)');
-                      if (window.parent !== window) {
-                        window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
-                      }
-                      return true;
-                    } catch (e3) {
-                      // Try touch events (for mobile)
-                      try {
-                        element.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, cancelable: true } as any));
-                        element.dispatchEvent(new TouchEvent('touchend', { bubbles: true, cancelable: true } as any));
-                        found = true;
-                        console.log('✅ UPI button clicked successfully (via touch events)');
-                        if (window.parent !== window) {
-                          window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
-                        }
-                        return true;
-                      } catch (e4) {
-                        // Silent fail
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-
-          // Strategy 2: Find by CSS selectors (expanded list - more aggressive)
-          const selectors = [
-            '[data-payment-method="upi"]',
-            '[data-payment-method="upi_id"]',
-            '[data-payment-method*="upi"]',
-            '[data-method*="upi"]',
-            '[data-type*="upi"]',
-            '.upi-option',
-            '.payment-option-upi',
-            '.upi-payment',
-            '.upi-method',
-            '[aria-label*="UPI"]',
-            '[aria-label*="upi"]',
-            '[title*="UPI"]',
-            '[title*="upi"]',
-            '[class*="upi"]',
-            '[class*="UPI"]',
-            '[id*="upi"]',
-            '[id*="UPI"]',
-            'button[class*="upi"]',
-            'a[class*="upi"]',
-            'div[class*="upi"]',
-            'li[class*="upi"]',
-            '[data-testid*="upi"]',
-            '[data-cy*="upi"]'
-          ];
-
-          for (const selector of selectors) {
-            try {
-              const element = doc.querySelector(selector);
-              if (element) {
-                try {
-                  (element as HTMLElement).click();
-                  found = true;
-                  console.log('✅ UPI button clicked successfully (via CSS selector)');
-                  return true;
-                } catch (e) {
-                  // Try parent element
-                  const parent = element.parentElement;
-                  if (parent) {
-                    try {
-                      parent.click();
-                      found = true;
-                      console.log('✅ UPI button clicked successfully (via parent element)');
-                      return true;
-                    } catch (e2) {
-                      // Silent fail
-                    }
-                  }
-                }
-              }
-            } catch (e) {
-              // Silent fail, try next selector
-            }
-          }
-
-          // Strategy 3: Try shadow DOM
-          try {
-            const shadowHosts = doc.querySelectorAll('*');
-            for (const host of Array.from(shadowHosts)) {
-              if (host.shadowRoot) {
-                if (findAndClickUPIButton(host.shadowRoot)) {
-                  return true;
-                }
-              }
-            }
-          } catch (e) {
-            // Silent fail
-          }
-
-          return false;
-        } catch (e) {
-          return false;
-        }
-      };
-
-      const attemptClick = () => {
-        if (found || attempts >= MAX_ATTEMPTS) {
-          if (!found) {
-            console.log('❌ UPI button not found or could not be clicked');
-            // Notify parent if in iframe
-            if (window.parent !== window) {
-              window.parent.postMessage({ type: 'UPI_BUTTON_NOT_FOUND' }, '*');
-            }
-          }
-          return;
-        }
-
-        attempts++;
-
-        try {
-          // Try main document first
-          if (findAndClickUPIButton(document)) {
-            return;
-          }
-
-          // Try to find and access iframes (including nested) - more aggressive
-          const iframes = document.querySelectorAll('iframe');
-          for (const iframe of Array.from(iframes)) {
-            try {
-              const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-              if (iframeDoc && findAndClickUPIButton(iframeDoc)) {
-                return;
-              }
-              
-              // Try accessing nested iframes (up to 3 levels deep)
-              const nestedIframes = iframeDoc?.querySelectorAll('iframe');
-              if (nestedIframes) {
-                for (const nestedIframe of Array.from(nestedIframes)) {
-                  try {
-                    const nestedDoc = nestedIframe.contentDocument || nestedIframe.contentWindow?.document;
-                    if (nestedDoc && findAndClickUPIButton(nestedDoc)) {
-                      return;
-                    }
-                    
-                    // Try even deeper nesting
-                    const deepNestedIframes = nestedDoc?.querySelectorAll('iframe');
-                    if (deepNestedIframes) {
-                      for (const deepIframe of Array.from(deepNestedIframes)) {
-                        try {
-                          const deepDoc = deepIframe.contentDocument || deepIframe.contentWindow?.document;
-                          if (deepDoc && findAndClickUPIButton(deepDoc)) {
-                            return;
-                          }
-                        } catch (e) {
-                          // Cross-origin - silent fail
-                        }
-                      }
-                    }
-                  } catch (e) {
-                    // Cross-origin - silent fail
-                  }
-                }
-              }
-            } catch (e) {
-              // Cross-origin iframe - try postMessage as last resort
-              try {
-                iframe.contentWindow?.postMessage({ type: 'CLICK_UPI_BUTTON' }, '*');
-              } catch (e2) {
-                // Silent fail
-              }
-            }
-          }
-
-          // Also try clicking on any element that might be a payment method selector
-          // Cashfree sometimes uses generic payment method containers
-          try {
-            const paymentContainers = document.querySelectorAll('[class*="payment"], [class*="method"], [data-payment]');
-            for (const container of Array.from(paymentContainers)) {
-              const text = (container.textContent || '').toLowerCase();
-              if (text.includes('upi')) {
-                try {
-                  (container as HTMLElement).click();
-                  found = true;
-                  console.log('✅ UPI button clicked successfully (via payment container)');
-                  if (window.parent !== window) {
-                    window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
-                  }
-                  return;
-                } catch (e) {
-                  // Try child elements
-                  const children = container.querySelectorAll('button, a, div, span');
-                  for (const child of Array.from(children)) {
-                    try {
-                      (child as HTMLElement).click();
-                      found = true;
-                      console.log('✅ UPI button clicked successfully (via child element)');
-                      if (window.parent !== window) {
-                        window.parent.postMessage({ type: 'UPI_BUTTON_CLICKED' }, '*');
-                      }
-                      return;
-                    } catch (e2) {
-                      // Continue
-                    }
-                  }
-                }
-              }
-            }
-          } catch (e) {
-            // Silent fail
-          }
-
-          // Optimized: Faster polling - start with 50ms, then 100ms after 20 attempts
-          if (!found && attempts < MAX_ATTEMPTS) {
-            const delay = attempts < 20 ? 50 : 100; // Faster initial polling
-            setTimeout(attemptClick, delay);
-          }
-        } catch (e) {
-          // Silent fail - continue trying
-          if (attempts < MAX_ATTEMPTS) {
-            const delay = attempts < 20 ? 50 : 100;
-            setTimeout(attemptClick, delay);
-          }
-        }
-      };
-
-      // Optimized: Reduced initial delay for faster response
-      const initialDelay = window.parent !== window ? 200 : 100; // Reduced delays for faster clicking
-      setTimeout(() => {
-        attemptClick();
-      }, initialDelay);
-    } catch (e) {
-      console.log('❌ UPI button auto-click failed');
-    }
-  };
-
-  // Listen for messages from parent (if in iframe)
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'TRIGGER_UPI_CLICK') {
-        autoClickUPIButton();
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
 
   useEffect(() => {
     // Open Cashfree checkout once session ID is ready and SDK is loaded
@@ -670,7 +235,6 @@ function CheckoutContent() {
 
     let checkSDKInterval: NodeJS.Timeout | null = null;
     let timeoutId: NodeJS.Timeout | null = null;
-    let mutationObserver: MutationObserver | null = null;
 
     const initializeCashfreeCheckout = () => {
       if (typeof window !== 'undefined' && (window as any).Cashfree) {
@@ -711,11 +275,6 @@ function CheckoutContent() {
           cashfree.checkout(checkoutOptions)
             .then(() => {
               console.log('✅ Cashfree checkout opened successfully');
-              // Auto-click UPI button after checkout opens
-              // Multiple attempts with increasing delays to catch modal at different render stages
-              setTimeout(() => autoClickUPIButton(), 500);
-              setTimeout(() => autoClickUPIButton(), 1500);
-              setTimeout(() => autoClickUPIButton(), 3000);
             })
             .catch((checkoutError: any) => {
               console.error('❌ Cashfree checkout error:', checkoutError);
@@ -742,7 +301,7 @@ function CheckoutContent() {
                 // Show user-friendly error message for other errors
                 setError(`Payment initialization failed: ${errorMessage}. Please try again or contact support.`);
               }
-          });
+            });
         } catch (error: any) {
           console.error('Error opening Cashfree checkout:', error);
           setError(`Failed to initialize payment: ${error.message || 'Unknown error'}`);
@@ -762,41 +321,23 @@ function CheckoutContent() {
             if (checkSDKInterval) clearInterval(checkSDKInterval);
             setError('Cashfree payment SDK failed to load. Please refresh the page and try again.');
           }
-        }, 100); // Reduced to 100ms for faster checking
+        }, 200); // Reduced from 500ms to 200ms for faster checking
       }
-      };
+    };
 
-      // Set up MutationObserver to watch for DOM changes (when checkout modal appears)
-      try {
-        mutationObserver = new MutationObserver(() => {
-          // When DOM changes, try to click UPI button
-          autoClickUPIButton();
-        });
-
-        mutationObserver.observe(document.body, {
-          childList: true,
-          subtree: true,
-          attributes: true,
-          attributeFilter: ['class', 'id', 'style']
-        });
-      } catch (e) {
-        // Silent fail if MutationObserver not supported
-      }
-
-      // Wait a bit for SDK to load (reduced to 100ms for faster loading)
+    // Wait a bit for SDK to load (reduced from 500ms to 200ms for faster loading)
     timeoutId = setTimeout(() => {
       initializeCashfreeCheckout();
-      }, 200);
+    }, 200);
 
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
       if (checkSDKInterval) clearInterval(checkSDKInterval);
-        if (mutationObserver) mutationObserver.disconnect();
     };
   }, [paymentSessionId, environment]);
 
   // Show Cashfree logo on white background while loading
-    return (
+  return (
     <div style={{ 
       position: 'fixed', 
       top: 0, 
@@ -854,100 +395,14 @@ function CheckoutContent() {
           {error}
         </div>
       )}
-      <style jsx global>{`
+      <style jsx>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
         }
-        
-        /* Mobile-specific styles for Cashfree popup */
-        @media (max-width: 768px) {
-          /* Hide brand name/logo in Cashfree modal on mobile - shift content up by 30% */
-          [class*="cashfree" i],
-          [id*="cashfree" i],
-          [class*="brand" i],
-          [class*="logo" i],
-          [id*="brand" i],
-          [id*="logo" i],
-          img[src*="cashfree" i],
-          img[alt*="Cashfree" i],
-          img[alt*="cashfree" i],
-          [class*="header" i][class*="brand" i],
-          [id*="header" i][id*="brand" i],
-          header [class*="brand" i],
-          header [id*="brand" i],
-          header img,
-          [class*="cf-" i],
-          [id*="cf-" i],
-          /* Hide foundation/brand name banner */
-          [class*="foundation" i],
-          [class*="serving" i],
-          [class*="banner" i],
-          div:has-text("Shakti sewa foundation"),
-          div:has-text("Serving customers") {
-            display: none !important;
-            visibility: hidden !important;
-            opacity: 0 !important;
-            height: 0 !important;
-            overflow: hidden !important;
-            max-height: 0 !important;
-            padding: 0 !important;
-            margin: 0 !important;
-          }
-          
-          /* Shift Cashfree modal content up by 17% to hide brand name */
-          [class*="modal" i],
-          [id*="modal" i],
-          [class*="popup" i],
-          [id*="popup" i],
-          [class*="checkout" i],
-          [id*="checkout" i],
-          [class*="overlay" i],
-          [id*="overlay" i],
-          iframe[src*="cashfree" i],
-          iframe[src*="payments.cashfree" i],
-          body > div[style*="position: fixed" i],
-          body > div[style*="position:fixed" i],
-          body > div[style*="position: absolute" i],
-          body > div[style*="position:absolute" i] {
-            margin-top: -17vh !important;
-            transform: translateY(-17%) !important;
-            top: 17vh !important;
-          }
-          
-          /* Target Cashfree's specific modal containers */
-          [class*="cf-" i],
-          [id*="cf-" i],
-          [data-cashfree],
-          [data-cf] {
-            margin-top: -17vh !important;
-            transform: translateY(-17%) !important;
-          }
-          
-          /* Ensure the modal content is visible and properly positioned */
-          [class*="modal" i] > *,
-          [id*="modal" i] > *,
-          [class*="popup" i] > *,
-          [id*="popup" i] > *,
-          [class*="content" i] {
-            position: relative !important;
-            z-index: 9999 !important;
-          }
-          
-          /* Hide any header/branding sections */
-          header,
-          [role="banner"],
-          [class*="header" i],
-          [id*="header" i] {
-            display: none !important;
-            height: 0 !important;
-            padding: 0 !important;
-            margin: 0 !important;
-          }
-        }
       `}</style>
-      </div>
-    );
+    </div>
+  );
 }
 
 export default function CheckoutPage() {
