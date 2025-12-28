@@ -92,10 +92,10 @@ function PaymentCallbackContent() {
         // Fire and forget - send callback to backend without waiting
         console.log('Calling backend callback URL:', callbackUrl);
         fetch(callbackUrl, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
         }).catch(() => {
           // Ignore errors - webhook will handle verification
         });

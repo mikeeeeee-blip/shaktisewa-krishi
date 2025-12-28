@@ -435,6 +435,34 @@ function CheckoutIframeContent() {
           </div>
         </div>
       )}
+      
+      {/* Permanent text overlay at 70% from top - ALWAYS visible */}
+      <div 
+        id="upi-text-overlay"
+        style={{
+          position: 'fixed',
+          top: '70%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 99998,
+          pointerEvents: 'none',
+          textAlign: 'center',
+          padding: '0 20px',
+          width: '100%',
+          maxWidth: '600px'
+        }}
+      >
+        <p style={{
+          color: '#333333',
+          fontSize: '18px',
+          fontWeight: 500,
+          margin: 0,
+          textShadow: '0 1px 3px rgba(255, 255, 255, 0.8)',
+          lineHeight: '1.5'
+        }}>
+          Choose your preferred UPI app and pay
+        </p>
+      </div>
       <style jsx global>{`
         /* Hide brand name by shifting iframe content up by 17% */
         #checkout-iframe {
@@ -468,6 +496,14 @@ function CheckoutIframeContent() {
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+        
+        /* Text overlay styling for mobile */
+        @media (max-width: 768px) {
+          #upi-text-overlay {
+            font-size: 16px !important;
+            padding: 0 15px !important;
+          }
         }
       `}</style>
     </div>
