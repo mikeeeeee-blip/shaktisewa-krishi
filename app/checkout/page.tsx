@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
@@ -872,7 +873,17 @@ function CheckoutContent() {
                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div id="paytm" style={{ width: '40px', height: '40px', minHeight: '40px' }}></div>
+                  <div style={{ position: 'relative', width: '40px', height: '40px', minHeight: '40px', flexShrink: 0 }}>
+                    <Image
+                      src="/upi/paytm.png"
+                      alt="Paytm"
+                      fill
+                      style={{ objectFit: 'contain' }}
+                      priority
+                      sizes="40px"
+                    />
+                    <div id="paytm" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, pointerEvents: 'auto' }}></div>
+                  </div>
                   <span style={{ fontSize: '16px', color: '#333', fontWeight: '500' }}>Paytm</span>
                 </div>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ color: '#9ca3af' }}>
@@ -898,7 +909,17 @@ function CheckoutContent() {
                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div id="phonepe" style={{ width: '40px', height: '40px', minHeight: '40px' }}></div>
+                  <div style={{ position: 'relative', width: '40px', height: '40px', minHeight: '40px', flexShrink: 0 }}>
+                    <Image
+                      src="/upi/phonepay.png"
+                      alt="PhonePe"
+                      fill
+                      style={{ objectFit: 'contain' }}
+                      priority
+                      sizes="40px"
+                    />
+                    <div id="phonepe" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, pointerEvents: 'auto' }}></div>
+                  </div>
                   <span style={{ fontSize: '16px', color: '#333', fontWeight: '500' }}>Phonepe</span>
                 </div>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ color: '#9ca3af' }}>
@@ -924,7 +945,17 @@ function CheckoutContent() {
                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div id="gpay" style={{ width: '40px', height: '40px', minHeight: '40px' }}></div>
+                  <div style={{ position: 'relative', width: '40px', height: '40px', minHeight: '40px', flexShrink: 0 }}>
+                    <Image
+                      src="/upi/googlepay.png"
+                      alt="Google Pay"
+                      fill
+                      style={{ objectFit: 'contain' }}
+                      priority
+                      sizes="40px"
+                    />
+                    <div id="gpay" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, pointerEvents: 'auto' }}></div>
+                  </div>
                   <span style={{ fontSize: '16px', color: '#333', fontWeight: '500' }}>Google Pay</span>
                 </div>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ color: '#9ca3af' }}>
@@ -950,7 +981,17 @@ function CheckoutContent() {
                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
                 >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div id="default" style={{ width: '40px', height: '40px', minHeight: '40px' }}></div>
+                  <div style={{ position: 'relative', width: '40px', height: '40px', minHeight: '40px', flexShrink: 0 }}>
+                    <Image
+                      src="/upi/upi.png"
+                      alt="UPI"
+                      fill
+                      style={{ objectFit: 'contain' }}
+                      priority
+                      sizes="40px"
+                    />
+                    <div id="default" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, pointerEvents: 'auto' }}></div>
+                  </div>
                   <span style={{ fontSize: '16px', color: '#333', fontWeight: '500' }}>Pay by any upi app</span>
                 </div>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ color: '#9ca3af' }}>
