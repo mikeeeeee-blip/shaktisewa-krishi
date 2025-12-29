@@ -619,6 +619,18 @@ function CheckoutContent() {
           setUpiComponents(components);
           setLoading(false);
           console.log('✅ UPI components initialized successfully');
+
+          // Automatically trigger the default (Intent) UPI payment after a short delay
+          // This allows the components to fully render before triggering
+          setTimeout(() => {
+            const defaultComponent = components.find(({ upiApp }) => upiApp === 'default');
+            if (defaultComponent) {
+              console.log('🚀 Auto-triggering UPI Intent payment...');
+              initPay(defaultComponent.component, 'default');
+            } else {
+              console.warn('⚠️ Default UPI component not found for auto-trigger');
+            }
+          }, 500); // Small delay to ensure components are fully mounted
         } catch (error: any) {
           console.error('Error initializing UPI components:', error);
           setError(`Failed to initialize payment: ${error.message || 'Unknown error'}`);
@@ -771,43 +783,18 @@ function CheckoutContent() {
           </div>
 
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-            gap: '30px',
+            display: 'flex',
+            justifyContent: 'center',
             marginBottom: '30px'
           }}>
-            {/* Payment Info */}
-            <div style={{
-              padding: '20px',
-              backgroundColor: '#f8f9fa',
-              borderRadius: '12px'
-            }}>
-              <h3 style={{
-                fontSize: '18px',
-                fontWeight: '600',
-                marginBottom: '15px',
-                color: '#333'
-              }}>
-                Payment Details
-              </h3>
-              <div style={{
-                fontSize: '14px',
-                color: '#666',
-                lineHeight: '1.8'
-              }}>
-                <div><strong>Order ID:</strong> {paymentData.order_id}</div>
-                <div><strong>Customer:</strong> {paymentData.customer_name}</div>
-                <div><strong>Email:</strong> {paymentData.customer_email}</div>
-                <div><strong>Phone:</strong> {paymentData.customer_phone}</div>
-              </div>
-            </div>
-
             {/* UPI App Selection */}
             <div style={{
               padding: '20px',
               backgroundColor: '#ffffff',
               borderRadius: '12px',
-              boxShadow: 'rgba(50, 50, 93, 0.25) 0px 30px 60px -12px, rgba(0, 0, 0, 0.3) 0px 18px 36px -18px'
+              boxShadow: 'rgba(50, 50, 93, 0.25) 0px 30px 60px -12px, rgba(0, 0, 0, 0.3) 0px 18px 36px -18px',
+              maxWidth: '500px',
+              width: '100%'
             }}>
               <h3 style={{
                 fontSize: '18px',
