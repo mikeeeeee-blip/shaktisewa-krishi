@@ -10,6 +10,8 @@ function CheckoutContent() {
   const [paymentSessionId, setPaymentSessionId] = useState<string | null>(null);
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('sandbox');
   const [upiComponents, setUpiComponents] = useState<any[]>([]);
+  const [paymentCompleted, setPaymentCompleted] = useState<boolean>(false);
+  const [paymentDetails, setPaymentDetails] = useState<any>(null);
 
   /**
    * UPI Intent Support for Cashfree Checkout
@@ -510,6 +512,28 @@ function CheckoutContent() {
 
         console.log('Payment response:', data);
 
+        // Check if payment was successful
+        const paymentStatus = data.paymentDetails?.paymentStatus || data.paymentStatus;
+        const paymentMessage = data.paymentDetails?.paymentMessage || data.message;
+        
+        if (data.paymentDetails) {
+          // Check various success indicators
+          if (
+            paymentStatus === 'SUCCESS' || 
+            paymentStatus === 'PAID' ||
+            paymentStatus === 'COMPLETED' ||
+            (paymentMessage && (
+              paymentMessage.toLowerCase().includes('success') ||
+              paymentMessage.toLowerCase().includes('paid') ||
+              paymentMessage.toLowerCase().includes('completed')
+            ))
+          ) {
+            // Payment completed successfully
+            setPaymentDetails(data.paymentDetails);
+            setPaymentCompleted(true);
+          }
+        }
+
         if (data.redirect) {
           console.log('Redirecting to:', data.redirect);
           // Cashfree will handle the redirect
@@ -886,7 +910,7 @@ function CheckoutContent() {
             </div>
           </div>
 
-          {loading && paymentSessionId && (
+          {loading && paymentSessionId && !paymentCompleted && (
             <div style={{
               textAlign: 'center',
               marginTop: '20px',
@@ -910,6 +934,172 @@ function CheckoutContent() {
               </div>
             </div>
           )}
+
+          {/* Payment Success Acknowledgement */}
+          {paymentCompleted && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10000,
+              animation: 'fadeIn 0.3s ease-in'
+            }}>
+              <div style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '20px',
+                padding: '40px',
+                maxWidth: '500px',
+                width: '90%',
+                textAlign: 'center',
+                boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+                animation: 'slideUp 0.5s ease-out',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                {/* Success Checkmark Animation */}
+                <div style={{
+                  width: '100px',
+                  height: '100px',
+                  margin: '0 auto 30px',
+                  position: 'relative'
+                }}>
+                  <div style={{
+                    width: '100px',
+                    height: '100px',
+                    borderRadius: '50%',
+                    backgroundColor: '#10b981',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    animation: 'scaleIn 0.5s ease-out',
+                    boxShadow: '0 0 0 0 rgba(16, 185, 129, 0.7)',
+                    animationName: 'scaleIn, pulse',
+                    animationDuration: '0.5s, 2s',
+                    animationIterationCount: '1, infinite',
+                    animationTimingFunction: 'ease-out, ease-in-out'
+                  }}>
+                    <svg
+                      width="60"
+                      height="60"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="white"
+                      strokeWidth="4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{
+                        animation: 'checkmarkDraw 0.8s ease-out 0.3s both'
+                      }}
+                    >
+                      <polyline 
+                        points="20 6 9 17 4 12"
+                        style={{
+                          strokeDasharray: '30',
+                          strokeDashoffset: '30',
+                          animation: 'checkmarkDraw 0.8s ease-out 0.3s forwards'
+                        }}
+                      ></polyline>
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Success Message */}
+                <h2 style={{
+                  fontSize: '28px',
+                  fontWeight: '700',
+                  color: '#1f2937',
+                  marginBottom: '15px',
+                  animation: 'fadeInUp 0.6s ease-out 0.4s both'
+                }}>
+                  Payment Successful! 🎉
+                </h2>
+
+                <p style={{
+                  fontSize: '16px',
+                  color: '#6b7280',
+                  marginBottom: '25px',
+                  lineHeight: '1.6',
+                  animation: 'fadeInUp 0.6s ease-out 0.5s both'
+                }}>
+                  Your payment of <strong style={{ color: '#10b981' }}>₹{paymentData?.amount.toFixed(2)}</strong> has been processed successfully.
+                </p>
+
+                {paymentDetails?.paymentMessage && (
+                  <p style={{
+                    fontSize: '14px',
+                    color: '#9ca3af',
+                    marginBottom: '30px',
+                    animation: 'fadeInUp 0.6s ease-out 0.6s both'
+                  }}>
+                    {paymentDetails.paymentMessage}
+                  </p>
+                )}
+
+                {/* Order Details */}
+                {paymentData && (
+                  <div style={{
+                    backgroundColor: '#f3f4f6',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    marginBottom: '25px',
+                    animation: 'fadeInUp 0.6s ease-out 0.7s both'
+                  }}>
+                    <div style={{
+                      fontSize: '12px',
+                      color: '#6b7280',
+                      marginBottom: '8px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
+                    }}>
+                      Order ID
+                    </div>
+                    <div style={{
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      color: '#1f2937'
+                    }}>
+                      {paymentData.order_id}
+                    </div>
+                  </div>
+                )}
+
+                {/* Confetti Effect Background */}
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  pointerEvents: 'none',
+                  overflow: 'hidden',
+                  borderRadius: '20px'
+                }}>
+                  {[...Array(20)].map((_, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        position: 'absolute',
+                        width: '8px',
+                        height: '8px',
+                        backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'][i % 5],
+                        left: `${Math.random() * 100}%`,
+                        top: `${Math.random() * 100}%`,
+                        borderRadius: '50%',
+                        animation: `confetti 3s ease-out ${Math.random() * 0.5}s both`,
+                        opacity: 0
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -917,6 +1107,75 @@ function CheckoutContent() {
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(30px) scale(0.9);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        @keyframes scaleIn {
+          from {
+            transform: scale(0);
+            opacity: 0;
+          }
+          to {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+
+        @keyframes pulse {
+          0%, 100% {
+            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+          }
+          50% {
+            box-shadow: 0 0 0 20px rgba(16, 185, 129, 0);
+          }
+        }
+
+        @keyframes checkmarkDraw {
+          from {
+            stroke-dashoffset: 30;
+            opacity: 0;
+          }
+          to {
+            stroke-dashoffset: 0;
+            opacity: 1;
+          }
+        }
+
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes confetti {
+          0% {
+            opacity: 1;
+            transform: translateY(0) rotate(0deg);
+          }
+          100% {
+            opacity: 0;
+            transform: translateY(-200px) rotate(720deg);
+          }
         }
       `}</style>
     </div>
