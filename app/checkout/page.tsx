@@ -10,8 +10,6 @@ function CheckoutContent() {
   const [paymentSessionId, setPaymentSessionId] = useState<string | null>(null);
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('sandbox');
   const [upiComponents, setUpiComponents] = useState<any[]>([]);
-  const [paymentMessage, setPaymentMessage] = useState<string>('');
-  const [paymentMessageType, setPaymentMessageType] = useState<'success' | 'error' | ''>('');
 
   /**
    * UPI Intent Support for Cashfree Checkout
@@ -489,8 +487,6 @@ function CheckoutContent() {
   const initPay = useCallback((component: any, upiApp: string) => {
     if (!paymentSessionId || !paymentData) return;
 
-    setPaymentMessage('');
-    setPaymentMessageType('');
     setLoading(true);
 
     try {
@@ -514,16 +510,6 @@ function CheckoutContent() {
 
         console.log('Payment response:', data);
 
-        if (data.error) {
-          setPaymentMessage(data.error.message || 'Payment failed');
-          setPaymentMessageType('error');
-        }
-
-        if (data.paymentDetails) {
-          setPaymentMessage(data.paymentDetails.paymentMessage || 'Payment successful');
-          setPaymentMessageType('success');
-        }
-
         if (data.redirect) {
           console.log('Redirecting to:', data.redirect);
           // Cashfree will handle the redirect
@@ -532,14 +518,10 @@ function CheckoutContent() {
         component.enable();
         setLoading(false);
         console.error('Payment error:', error);
-        setPaymentMessage(error?.message || 'Payment failed. Please try again.');
-        setPaymentMessageType('error');
       });
     } catch (error: any) {
       setLoading(false);
       console.error('Error initiating payment:', error);
-      setPaymentMessage(error?.message || 'Failed to initiate payment');
-      setPaymentMessageType('error');
     }
   }, [paymentSessionId, paymentData, environment]);
 
@@ -903,23 +885,6 @@ function CheckoutContent() {
               </div>
             </div>
           </div>
-
-          {/* Payment Message */}
-          {paymentMessage && (
-            <div style={{
-              maxWidth: '800px',
-              margin: '0 auto',
-              padding: '15px 20px',
-              borderRadius: '8px',
-              backgroundColor: paymentMessageType === 'success' ? '#d4edda' : '#f8d7da',
-              border: `1px solid ${paymentMessageType === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
-              color: paymentMessageType === 'success' ? '#155724' : '#721c24',
-              textAlign: 'center',
-              fontSize: '14px'
-            }}>
-              {paymentMessage}
-            </div>
-          )}
 
           {loading && paymentSessionId && (
             <div style={{
