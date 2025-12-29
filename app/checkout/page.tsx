@@ -230,10 +230,8 @@ function CheckoutContent() {
       });
     };
 
-    // Check immediately and after a delay (for Cashfree checkout to load)
+    // Check immediately only - no need for polling
     checkExistingLinks();
-    const checkInterval = setInterval(checkExistingLinks, 1000);
-    setTimeout(() => clearInterval(checkInterval), 30000); // Stop after 30 seconds
 
     console.log('✅ UPI Intent interception set up successfully');
 
@@ -241,7 +239,6 @@ function CheckoutContent() {
     return () => {
       document.removeEventListener('click', handleLinkClick, true);
       if (observerCleanup) observerCleanup();
-      clearInterval(checkInterval);
       // Note: We don't need to restore location methods as we didn't override them
       // The proxy will be garbage collected when component unmounts
     };
@@ -276,14 +273,7 @@ function CheckoutContent() {
     document.body.style.overflow = 'auto';
     document.documentElement.style.overflow = 'auto';
 
-    // Preload Cashfree SDK for faster loading
-    if (typeof window !== 'undefined' && !(window as any).Cashfree) {
-      const script = document.createElement('script');
-      script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
-      script.async = true;
-      script.defer = true;
-      document.head.appendChild(script);
-    }
+    // Cashfree SDK is now preloaded via Next.js Script component in the component
 
     // Register Android JS Bridge for UPI Intent (if in Android/React Native webview)
     // This follows Cashfree's code-based solution for webview contexts
@@ -390,7 +380,7 @@ function CheckoutContent() {
 
         // Call Next.js API route to create Cashfree session with timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout for faster failure
 
         try {
           const response = await fetch('/api/payments/create-session', {
@@ -580,7 +570,6 @@ function CheckoutContent() {
     if (!paymentSessionId || !paymentData) return;
 
     let checkSDKInterval: NodeJS.Timeout | null = null;
-    let timeoutId: NodeJS.Timeout | null = null;
 
     const initializeUPIComponents = () => {
       if (typeof window !== 'undefined' && (window as any).Cashfree) {
@@ -635,8 +624,8 @@ function CheckoutContent() {
                   console.error(`Error loading ${upiApp}:`, data.error?.message);
                 });
 
-                // Wait for component to fully render, then ensure it's clickable
-                setTimeout(() => {
+                // Make elements clickable immediately with minimal delay
+                requestAnimationFrame(() => {
                   // Make the mounted element (icon) and all its children clickable
                   mountElement.style.cursor = 'pointer';
                   mountElement.style.pointerEvents = 'auto';
@@ -662,7 +651,7 @@ function CheckoutContent() {
                   childElements.forEach((el) => {
                     el.addEventListener('click', iconClickHandler);
                   });
-                }, 300);
+                });
 
                 // Handle container click (entire payment option card)
                 const containerId = `${upiApp}-container`;
@@ -699,10 +688,10 @@ function CheckoutContent() {
           setLoading(false);
         }
       } else {
-        // SDK not loaded yet, wait and retry
+        // SDK not loaded yet, wait and retry with faster polling
         console.log('Cashfree SDK not loaded yet, waiting...');
         let retryCount = 0;
-        const maxRetries = 30; // 6 seconds total (30 * 200ms)
+        const maxRetries = 20; // 1 second total (20 * 50ms) - much faster
 
         checkSDKInterval = setInterval(() => {
           retryCount++;
@@ -714,17 +703,14 @@ function CheckoutContent() {
             setError('Cashfree payment SDK failed to load. Please refresh the page and try again.');
             setLoading(false);
           }
-        }, 200);
+        }, 50); // Faster polling: 50ms instead of 200ms
       }
     };
 
-    // Wait a bit for SDK to load
-    timeoutId = setTimeout(() => {
-      initializeUPIComponents();
-    }, 200);
+    // Initialize immediately - SDK should be preloaded
+    initializeUPIComponents();
 
     return () => {
-      if (timeoutId) clearTimeout(timeoutId);
       if (checkSDKInterval) clearInterval(checkSDKInterval);
       // Cleanup components
       setUpiComponents((prevComponents) => {
@@ -820,15 +806,15 @@ function CheckoutContent() {
                 fontSize: '14px',
                 opacity: 0.9,
                 marginBottom: '4px'
-              }}>
+            }}>
                 Amount
               </div>
-              <div style={{
-                fontSize: '24px',
-                fontWeight: '600'
-              }}>
-                ₹{paymentData.amount.toFixed(2)}
-              </div>
+            <div style={{
+              fontSize: '24px',
+              fontWeight: '600'
+            }}>
+              ₹{paymentData.amount.toFixed(2)}
+            </div>
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{
@@ -851,38 +837,38 @@ function CheckoutContent() {
           {/* Light Grey Payment Method Selection */}
           <div style={{
             backgroundColor: '#f5f5f5',
-            padding: '20px',
+              padding: '20px',
             marginTop: '0'
-          }}>
-            <h3 style={{
-              fontSize: '18px',
-              fontWeight: '600',
-              marginBottom: '20px',
-              color: '#333',
-              textAlign: 'center'
             }}>
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: '600',
+                marginBottom: '20px',
+                color: '#333',
+                textAlign: 'center'
+              }}>
               Choose Payment Method
-            </h3>
-            <div style={{
+              </h3>
+              <div style={{
               display: 'flex',
               flexDirection: 'column',
               gap: '12px'
-            }}>
+              }}>
               {/* Paytm */}
-              <div 
+                <div 
                 id="paytm-container"
-                style={{
+                  style={{
                   padding: '16px',
                   backgroundColor: '#ffffff',
                   borderRadius: '8px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  cursor: 'pointer',
+                    cursor: 'pointer',
                   transition: 'background-color 0.2s',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -892,23 +878,23 @@ function CheckoutContent() {
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ color: '#9ca3af' }}>
                   <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-              </div>
+                </div>
 
               {/* PhonePe */}
-              <div 
+                <div 
                 id="phonepe-container"
-                style={{
+                  style={{
                   padding: '16px',
                   backgroundColor: '#ffffff',
                   borderRadius: '8px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  cursor: 'pointer',
+                    cursor: 'pointer',
                   transition: 'background-color 0.2s',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -918,23 +904,23 @@ function CheckoutContent() {
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ color: '#9ca3af' }}>
                   <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-              </div>
+                </div>
 
-              {/* Google Pay */}
-              <div 
-                id="gpay-container"
-                style={{
+                {/* Google Pay */}
+                <div 
+                  id="gpay-container"
+                  style={{
                   padding: '16px',
                   backgroundColor: '#ffffff',
                   borderRadius: '8px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  cursor: 'pointer',
+                    cursor: 'pointer',
                   transition: 'background-color 0.2s',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -944,25 +930,25 @@ function CheckoutContent() {
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ color: '#9ca3af' }}>
                   <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-              </div>
+                </div>
 
               {/* UPI (combines default/intent and web) */}
-              <div 
-                id="default-container"
-                style={{
+                <div 
+                  id="default-container"
+                  style={{
                   padding: '16px',
                   backgroundColor: '#ffffff',
                   borderRadius: '8px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.2s',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
-              >
+                >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <div id="default" style={{ width: '40px', height: '40px', minHeight: '40px' }}></div>
                   <span style={{ fontSize: '16px', color: '#333', fontWeight: '500' }}>Pay by any upi app</span>

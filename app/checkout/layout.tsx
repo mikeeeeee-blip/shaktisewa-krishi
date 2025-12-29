@@ -1,19 +1,31 @@
-import type { Metadata } from "next";
+'use client';
 
-export const metadata: Metadata = {
-  title: "",
-  description: "",
-  icons: {
-    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'></text></svg>",
-    apple: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'></text></svg>",
-  },
-};
+import { useEffect } from 'react';
 
 export default function CheckoutLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  useEffect(() => {
+    // Preload UPI logo images for instant display - critical for fast rendering
+    const preloadImages = [
+      '/upi/paytm.png',
+      '/upi/phonepay.png',
+      '/upi/googlepay.png',
+      '/upi/upi.png'
+    ];
+    
+    preloadImages.forEach((src) => {
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.href = src;
+      link.as = 'image';
+      link.fetchPriority = 'high'; // High priority for critical images
+      document.head.appendChild(link);
+    });
+  }, []);
+
   return (
     <div style={{ backgroundColor: '#ffffff', minHeight: '100vh' }}>
       {children}
