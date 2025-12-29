@@ -602,8 +602,8 @@ function CheckoutContent() {
             mode: environment
           });
 
-          // UPI apps to create - only Paytm, PhonePe, and UPI (default)
-          const upiApps = ['phonepe', 'paytm', 'default'];
+          // UPI apps to create - Paytm, PhonePe, Google Pay, and UPI (default)
+          const upiApps = ['phonepe', 'paytm', 'gpay', 'default'];
           const components: any[] = [];
 
           // Create UPI app components
@@ -723,15 +723,6 @@ function CheckoutContent() {
           gap: '20px',
           zIndex: 9999
         }}>
-          <img 
-            src="/cashfree-logo.png" 
-            alt="Cashfree Payments" 
-            style={{
-              width: '100px',
-              height: '50px',
-              objectFit: 'contain'
-            }}
-          />
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -788,7 +779,7 @@ function CheckoutContent() {
                 opacity: 0.9,
                 marginBottom: '4px'
               }}>
-                Recharge amount
+                Amount
               </div>
               <div style={{
                 fontSize: '24px',
@@ -856,22 +847,9 @@ function CheckoutContent() {
                   <div id="paytm" style={{ width: '40px', height: '40px', minHeight: '40px' }}></div>
                   <span style={{ fontSize: '16px', color: '#333', fontWeight: '500' }}>Paytm</span>
                 </div>
-                <div style={{
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '50%',
-                  border: '2px solid #e5e7eb',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <div style={{
-                    width: '12px',
-                    height: '12px',
-                    borderRadius: '50%',
-                    backgroundColor: '#e5e7eb'
-                  }}></div>
-                </div>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ color: '#9ca3af' }}>
+                  <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </div>
 
               {/* PhonePe */}
@@ -895,22 +873,35 @@ function CheckoutContent() {
                   <div id="phonepe" style={{ width: '40px', height: '40px', minHeight: '40px' }}></div>
                   <span style={{ fontSize: '16px', color: '#333', fontWeight: '500' }}>Phonepe</span>
                 </div>
-                <div style={{
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '50%',
-                  border: '2px solid #e5e7eb',
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ color: '#9ca3af' }}>
+                  <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+
+              {/* Google Pay */}
+              <div 
+                id="gpay-container"
+                style={{
+                  padding: '16px',
+                  backgroundColor: '#ffffff',
+                  borderRadius: '8px',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <div style={{
-                    width: '12px',
-                    height: '12px',
-                    borderRadius: '50%',
-                    backgroundColor: '#e5e7eb'
-                  }}></div>
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div id="gpay" style={{ width: '40px', height: '40px', minHeight: '40px' }}></div>
+                  <span style={{ fontSize: '16px', color: '#333', fontWeight: '500' }}>Google Pay</span>
                 </div>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ color: '#9ca3af' }}>
+                  <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </div>
 
               {/* UPI (combines default/intent and web) */}
@@ -932,24 +923,11 @@ function CheckoutContent() {
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <div id="default" style={{ width: '40px', height: '40px', minHeight: '40px' }}></div>
-                  <span style={{ fontSize: '16px', color: '#333', fontWeight: '500' }}>Upi</span>
+                  <span style={{ fontSize: '16px', color: '#333', fontWeight: '500' }}>Pay by any upi app</span>
                 </div>
-                <div style={{
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '50%',
-                  border: '2px solid #e5e7eb',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <div style={{
-                    width: '12px',
-                    height: '12px',
-                    borderRadius: '50%',
-                    backgroundColor: '#e5e7eb'
-                  }}></div>
-                </div>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ color: '#9ca3af' }}>
+                  <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </div>
             </div>
           </div>
@@ -1243,15 +1221,23 @@ export default function CheckoutPage() {
         alignItems: 'center',
         justifyContent: 'center'
       }}>
-        <img 
-          src="/cashfree-logo.png" 
-          alt="Cashfree Payments" 
-          style={{
-            width: '100px',
-            height: '50px',
-            objectFit: 'contain'
-          }}
-        />
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          color: '#666',
+          fontSize: '14px'
+        }}>
+          <div style={{
+            width: '16px',
+            height: '16px',
+            border: '2px solid #f3f3f3',
+            borderTop: '2px solid #0070f3',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite'
+          }} />
+          <span>Loading...</span>
+        </div>
       </div>
     }>
       <CheckoutContent />
