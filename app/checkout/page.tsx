@@ -625,8 +625,9 @@ function CheckoutContent() {
               if (mountElement) {
                 component.mount(`#${upiApp}`);
                 
-                // Handle component events
+                // Handle component events - Cashfree SDK click
                 component.on('click', () => {
+                  console.log(`🖱️ Cashfree component clicked: ${upiApp}`);
                   initPay(component, upiApp);
                 });
 
@@ -634,9 +635,50 @@ function CheckoutContent() {
                   console.error(`Error loading ${upiApp}:`, data.error?.message);
                 });
 
-                // Also handle parent click
-                if (mountElement.parentElement) {
-                  mountElement.parentElement.addEventListener('click', () => {
+                // Wait for component to fully render, then ensure it's clickable
+                setTimeout(() => {
+                  // Make the mounted element (icon) and all its children clickable
+                  mountElement.style.cursor = 'pointer';
+                  mountElement.style.pointerEvents = 'auto';
+                  
+                  // Find all elements within the mounted component and make them clickable
+                  const allElements = mountElement.querySelectorAll('*');
+                  allElements.forEach((el) => {
+                    (el as HTMLElement).style.cursor = 'pointer';
+                    (el as HTMLElement).style.pointerEvents = 'auto';
+                  });
+
+                  // Add direct click handler to icon - triggers payment when icon is clicked
+                  // This works alongside Cashfree's built-in click handler
+                  const iconClickHandler = () => {
+                    console.log(`🖱️ Payment icon clicked: ${upiApp}`);
+                    initPay(component, upiApp);
+                  };
+                  
+                  mountElement.addEventListener('click', iconClickHandler);
+                  
+                  // Also handle clicks on any child elements (SVG, IMG, etc.)
+                  const childElements = mountElement.querySelectorAll('svg, img, canvas, div, button');
+                  childElements.forEach((el) => {
+                    el.addEventListener('click', iconClickHandler);
+                  });
+                }, 300);
+
+                // Handle container click (entire payment option card)
+                const containerId = `${upiApp}-container`;
+                const containerElement = document.getElementById(containerId);
+                if (containerElement) {
+                  containerElement.addEventListener('click', (e) => {
+                    // Don't trigger if clicking directly on the icon (already handled above)
+                    const target = e.target as HTMLElement;
+                    if (target === mountElement || mountElement.contains(target) || 
+                        mountElement.querySelector('svg')?.contains(target) ||
+                        mountElement.querySelector('img')?.contains(target)) {
+                      return;
+                    }
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log(`🖱️ Container clicked: ${upiApp}`);
                     initPay(component, upiApp);
                   });
                 }
