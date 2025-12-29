@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 function CheckoutContent() {
@@ -9,6 +9,9 @@ function CheckoutContent() {
   const [loading, setLoading] = useState(true);
   const [paymentSessionId, setPaymentSessionId] = useState<string | null>(null);
   const [environment, setEnvironment] = useState<'sandbox' | 'production'>('sandbox');
+  const [upiComponents, setUpiComponents] = useState<any[]>([]);
+  const [paymentMessage, setPaymentMessage] = useState<string>('');
+  const [paymentMessageType, setPaymentMessageType] = useState<'success' | 'error' | ''>('');
 
   /**
    * UPI Intent Support for Cashfree Checkout
@@ -268,9 +271,9 @@ function CheckoutContent() {
     document.documentElement.style.margin = '0';
     document.documentElement.style.padding = '0';
     
-    // Remove any overflow
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
+    // Allow scrolling for custom checkout page
+    document.body.style.overflow = 'auto';
+    document.documentElement.style.overflow = 'auto';
 
     // Preload Cashfree SDK for faster loading
     if (typeof window !== 'undefined' && !(window as any).Cashfree) {
@@ -482,14 +485,72 @@ function CheckoutContent() {
     createCashfreeSession();
   }, [paymentData, error]);
 
+  // Function to initiate payment
+  const initPay = useCallback((component: any, upiApp: string) => {
+    if (!paymentSessionId || !paymentData) return;
+
+    setPaymentMessage('');
+    setPaymentMessageType('');
+    setLoading(true);
+
+    try {
+      component.disable();
+
+      // Build return URL
+      const returnUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/payment-callback?order_id=${paymentData.order_id}&transaction_id=${paymentData.transaction_id}`;
+
+      const cashfree = (window as any).Cashfree({
+        mode: environment
+      });
+
+      cashfree.pay({
+        paymentMethod: component,
+        paymentSessionId: paymentSessionId.trim(),
+        returnUrl: returnUrl,
+        redirect: 'if_required'
+      }).then((data: any) => {
+        component.enable();
+        setLoading(false);
+
+        console.log('Payment response:', data);
+
+        if (data.error) {
+          setPaymentMessage(data.error.message || 'Payment failed');
+          setPaymentMessageType('error');
+        }
+
+        if (data.paymentDetails) {
+          setPaymentMessage(data.paymentDetails.paymentMessage || 'Payment successful');
+          setPaymentMessageType('success');
+        }
+
+        if (data.redirect) {
+          console.log('Redirecting to:', data.redirect);
+          // Cashfree will handle the redirect
+        }
+      }).catch((error: any) => {
+        component.enable();
+        setLoading(false);
+        console.error('Payment error:', error);
+        setPaymentMessage(error?.message || 'Payment failed. Please try again.');
+        setPaymentMessageType('error');
+      });
+    } catch (error: any) {
+      setLoading(false);
+      console.error('Error initiating payment:', error);
+      setPaymentMessage(error?.message || 'Failed to initiate payment');
+      setPaymentMessageType('error');
+    }
+  }, [paymentSessionId, paymentData, environment]);
+
   useEffect(() => {
-    // Open Cashfree checkout once session ID is ready and SDK is loaded
-    if (!paymentSessionId) return;
+    // Initialize UPI app components once session ID is ready and SDK is loaded
+    if (!paymentSessionId || !paymentData) return;
 
     let checkSDKInterval: NodeJS.Timeout | null = null;
     let timeoutId: NodeJS.Timeout | null = null;
 
-    const initializeCashfreeCheckout = () => {
+    const initializeUPIComponents = () => {
       if (typeof window !== 'undefined' && (window as any).Cashfree) {
         try {
           const exactPaymentSessionId = paymentSessionId.trim();
@@ -499,155 +560,407 @@ function CheckoutContent() {
             return;
           }
 
-          console.log('Initializing Cashfree checkout:', {
+          console.log('Initializing UPI Intent checkout:', {
             mode: environment,
             paymentSessionIdLength: exactPaymentSessionId.length,
             paymentSessionIdPreview: exactPaymentSessionId.substring(0, 50) + '...',
-            paymentSessionIdFull: exactPaymentSessionId,
-            startsWithSession: exactPaymentSessionId.startsWith('session_'),
-            validCharacters: /^[a-zA-Z0-9_-]+$/.test(exactPaymentSessionId),
           });
 
           const cashfree = (window as any).Cashfree({
             mode: environment
           });
 
-          console.log('Opening Cashfree checkout with paymentSessionId:', exactPaymentSessionId);
+          // UPI apps to create
+          const upiApps = ['phonepe', 'paytm', 'gpay', 'default', 'web'];
+          const components: any[] = [];
 
-          // Open Cashfree checkout using SDK
-          const checkoutOptions = {
-            paymentSessionId: exactPaymentSessionId,
-            redirectTarget: '_self' as const
-          };
+          // Create UPI app components
+          upiApps.forEach((upiApp) => {
+            try {
+              const component = cashfree.create('upiApp', {
+                values: {
+                  upiApp: upiApp,
+                },
+                style: {
+                  base: {
+                    fontSize: '22px'
+                  }
+                }
+              });
 
-          console.log('Checkout options being sent:', {
-            paymentSessionId: exactPaymentSessionId.substring(0, 50) + '...',
-            redirectTarget: checkoutOptions.redirectTarget,
+              // Mount component to the corresponding div
+              const mountElement = document.getElementById(upiApp);
+              if (mountElement) {
+                component.mount(`#${upiApp}`);
+                
+                // Handle component events
+                component.on('click', () => {
+                  initPay(component, upiApp);
+                });
+
+                component.on('loaderror', (data: any) => {
+                  console.error(`Error loading ${upiApp}:`, data.error?.message);
+                });
+
+                // Also handle parent click
+                if (mountElement.parentElement) {
+                  mountElement.parentElement.addEventListener('click', () => {
+                    initPay(component, upiApp);
+                  });
+                }
+
+                components.push({ component, upiApp });
+              }
+            } catch (err: any) {
+              console.error(`Error creating ${upiApp} component:`, err);
+            }
           });
 
-          cashfree.checkout(checkoutOptions)
-            .then(() => {
-              console.log('✅ Cashfree checkout opened successfully');
-            })
-            .catch((checkoutError: any) => {
-              console.error('❌ Cashfree checkout error:', checkoutError);
-              const errorMessage = checkoutError?.message || checkoutError?.error?.message || checkoutError?.code || 'Unknown error from Cashfree';
-              const errorCode = checkoutError?.code || checkoutError?.error?.code;
-              const errorType = checkoutError?.type || checkoutError?.error?.type;
-              
-              console.error('Error details:', {
-                message: errorMessage,
-                code: errorCode,
-                type: errorType,
-                fullError: checkoutError,
-                sessionIdLength: exactPaymentSessionId.length,
-                sessionIdPreview: exactPaymentSessionId.substring(0, 50)
-              });
-              
-              // If SDK checkout fails, try direct URL redirect as fallback
-              if (errorCode === 'payment_session_id_invalid' || errorMessage.includes('payment_session_id') || errorCode === 'payment_session_id_invalid') {
-                console.log('⚠️ SDK checkout failed, trying direct URL redirect as fallback...');
-                const fallbackUrl = `https://payments.cashfree.com/order/#${exactPaymentSessionId}`;
-                console.log('Fallback URL:', fallbackUrl);
-                window.location.replace(fallbackUrl);
-              } else {
-                // Show user-friendly error message for other errors
-                setError(`Payment initialization failed: ${errorMessage}. Please try again or contact support.`);
-              }
-            });
+          setUpiComponents(components);
+          setLoading(false);
+          console.log('✅ UPI components initialized successfully');
         } catch (error: any) {
-          console.error('Error opening Cashfree checkout:', error);
+          console.error('Error initializing UPI components:', error);
           setError(`Failed to initialize payment: ${error.message || 'Unknown error'}`);
+          setLoading(false);
         }
       } else {
-        // SDK not loaded yet, wait and retry (reduced since SDK is preloaded in layout)
+        // SDK not loaded yet, wait and retry
         console.log('Cashfree SDK not loaded yet, waiting...');
         let retryCount = 0;
-        const maxRetries = 15; // 3 seconds total (15 * 200ms) - reduced since SDK is preloaded
+        const maxRetries = 30; // 6 seconds total (30 * 200ms)
 
         checkSDKInterval = setInterval(() => {
           retryCount++;
           if ((window as any).Cashfree) {
             if (checkSDKInterval) clearInterval(checkSDKInterval);
-            initializeCashfreeCheckout();
+            initializeUPIComponents();
           } else if (retryCount >= maxRetries) {
             if (checkSDKInterval) clearInterval(checkSDKInterval);
             setError('Cashfree payment SDK failed to load. Please refresh the page and try again.');
+            setLoading(false);
           }
-        }, 200); // Reduced from 500ms to 200ms for faster checking
+        }, 200);
       }
     };
 
-    // Wait a bit for SDK to load (reduced from 500ms to 200ms for faster loading)
+    // Wait a bit for SDK to load
     timeoutId = setTimeout(() => {
-      initializeCashfreeCheckout();
+      initializeUPIComponents();
     }, 200);
 
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
       if (checkSDKInterval) clearInterval(checkSDKInterval);
+      // Cleanup components
+      setUpiComponents((prevComponents) => {
+        prevComponents.forEach(({ component }) => {
+          try {
+            if (component && typeof component.unmount === 'function') {
+              component.unmount();
+            }
+          } catch (e) {
+            // Ignore unmount errors
+          }
+        });
+        return [];
+      });
     };
-  }, [paymentSessionId, environment]);
+  }, [paymentSessionId, environment, paymentData, initPay]);
 
-  // Show Cashfree logo on white background while loading
+  // Show custom UPI Intent checkout UI
   return (
     <div style={{ 
-      position: 'fixed', 
-      top: 0, 
-      left: 0, 
-      width: '100%', 
-      height: '100%', 
+      minHeight: '100vh',
       backgroundColor: '#ffffff',
-      margin: 0,
-      padding: 0,
-      zIndex: 9999,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      flexDirection: 'column',
-      gap: '20px'
+      padding: '20px',
+      fontFamily: 'system-ui, -apple-system, sans-serif'
     }}>
-      <img 
-        src="/cashfree-logo.png" 
-        alt="Cashfree Payments" 
-        style={{
-          width: '100px',
-          height: '50px',
-          objectFit: 'contain'
-        }}
-      />
-      {loading && (
+      {loading && !paymentSessionId && (
         <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          backgroundColor: '#ffffff',
           display: 'flex',
           alignItems: 'center',
-          gap: '10px',
-          color: '#666',
-          fontSize: '14px',
-          fontFamily: 'system-ui, -apple-system, sans-serif'
+          justifyContent: 'center',
+          flexDirection: 'column',
+          gap: '20px',
+          zIndex: 9999
         }}>
+          <img 
+            src="/cashfree-logo.png" 
+            alt="Cashfree Payments" 
+            style={{
+              width: '100px',
+              height: '50px',
+              objectFit: 'contain'
+            }}
+          />
           <div style={{
-            width: '16px',
-            height: '16px',
-            border: '2px solid #f3f3f3',
-            borderTop: '2px solid #0070f3',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite'
-          }} />
-          <span>Loading payment gateway...</span>
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            color: '#666',
+            fontSize: '14px'
+          }}>
+            <div style={{
+              width: '16px',
+              height: '16px',
+              border: '2px solid #f3f3f3',
+              borderTop: '2px solid #0070f3',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
+            <span>Loading payment gateway...</span>
+          </div>
         </div>
       )}
+
       {error && (
         <div style={{
-          color: '#d32f2f',
-          fontSize: '14px',
-          fontFamily: 'system-ui, -apple-system, sans-serif',
-          textAlign: 'center',
-          padding: '0 20px',
-          maxWidth: '500px'
+          maxWidth: '800px',
+          margin: '0 auto',
+          padding: '20px',
+          backgroundColor: '#fff3cd',
+          border: '1px solid #ffc107',
+          borderRadius: '8px',
+          color: '#856404',
+          marginBottom: '20px'
         }}>
-          {error}
+          <strong>Error:</strong> {error}
         </div>
       )}
+
+      {paymentSessionId && paymentData && (
+        <div style={{
+          maxWidth: '1200px',
+          margin: '0 auto'
+        }}>
+          <div style={{
+            marginBottom: '30px',
+            textAlign: 'center'
+          }}>
+            <h1 style={{
+              fontSize: '28px',
+              fontWeight: '600',
+              color: '#333',
+              marginBottom: '10px'
+            }}>
+              Complete Your Payment
+            </h1>
+            <div style={{
+              fontSize: '24px',
+              color: '#0070f3',
+              fontWeight: '600'
+            }}>
+              ₹{paymentData.amount.toFixed(2)}
+            </div>
+            {paymentData.description && (
+              <div style={{
+                fontSize: '14px',
+                color: '#666',
+                marginTop: '8px'
+              }}>
+                {paymentData.description}
+              </div>
+            )}
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+            gap: '30px',
+            marginBottom: '30px'
+          }}>
+            {/* Payment Info */}
+            <div style={{
+              padding: '20px',
+              backgroundColor: '#f8f9fa',
+              borderRadius: '12px'
+            }}>
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: '600',
+                marginBottom: '15px',
+                color: '#333'
+              }}>
+                Payment Details
+              </h3>
+              <div style={{
+                fontSize: '14px',
+                color: '#666',
+                lineHeight: '1.8'
+              }}>
+                <div><strong>Order ID:</strong> {paymentData.order_id}</div>
+                <div><strong>Customer:</strong> {paymentData.customer_name}</div>
+                <div><strong>Email:</strong> {paymentData.customer_email}</div>
+                <div><strong>Phone:</strong> {paymentData.customer_phone}</div>
+              </div>
+            </div>
+
+            {/* UPI App Selection */}
+            <div style={{
+              padding: '20px',
+              backgroundColor: '#ffffff',
+              borderRadius: '12px',
+              boxShadow: 'rgba(50, 50, 93, 0.25) 0px 30px 60px -12px, rgba(0, 0, 0, 0.3) 0px 18px 36px -18px'
+            }}>
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: '600',
+                marginBottom: '20px',
+                color: '#333',
+                textAlign: 'center'
+              }}>
+                Select Payment App
+              </h3>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '0'
+              }}>
+                {/* PhonePe */}
+                <div 
+                  id="phonepe-container"
+                  style={{
+                    padding: '20px',
+                    textAlign: 'center',
+                    borderTop: '1px solid #efefef',
+                    borderRight: '1px solid #efefef',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <div id="phonepe" style={{ width: '34px', margin: '0 auto', minHeight: '34px' }}></div>
+                  <div style={{ marginTop: '10px', fontSize: '14px', color: '#333' }}>PhonePe</div>
+                </div>
+
+                {/* Paytm */}
+                <div 
+                  id="paytm-container"
+                  style={{
+                    padding: '20px',
+                    textAlign: 'center',
+                    borderTop: '1px solid #efefef',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <div id="paytm" style={{ width: '34px', margin: '0 auto', minHeight: '34px' }}></div>
+                  <div style={{ marginTop: '10px', fontSize: '14px', color: '#333' }}>Paytm</div>
+                </div>
+
+                {/* Google Pay */}
+                <div 
+                  id="gpay-container"
+                  style={{
+                    padding: '20px',
+                    textAlign: 'center',
+                    borderTop: '1px solid #efefef',
+                    borderRight: '1px solid #efefef',
+                    borderBottom: '1px solid #efefef',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <div id="gpay" style={{ width: '34px', margin: '0 auto', minHeight: '34px' }}></div>
+                  <div style={{ marginTop: '10px', fontSize: '14px', color: '#333' }}>Google Pay</div>
+                </div>
+
+                {/* Intent (Default) */}
+                <div 
+                  id="default-container"
+                  style={{
+                    padding: '20px',
+                    textAlign: 'center',
+                    borderTop: '1px solid #efefef',
+                    borderBottom: '1px solid #efefef',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <div id="default" style={{ width: '34px', margin: '0 auto', minHeight: '34px' }}></div>
+                  <div style={{ marginTop: '10px', fontSize: '14px', color: '#333' }}>Intent</div>
+                </div>
+
+                {/* Web Link */}
+                <div 
+                  id="web-container"
+                  style={{
+                    padding: '20px',
+                    textAlign: 'center',
+                    borderRight: '1px solid #efefef',
+                    borderBottom: '1px solid #efefef',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s',
+                    gridColumn: 'span 2'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <div id="web" style={{ width: '34px', margin: '0 auto', minHeight: '34px' }}></div>
+                  <div style={{ marginTop: '10px', fontSize: '14px', color: '#333' }}>Link</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Payment Message */}
+          {paymentMessage && (
+            <div style={{
+              maxWidth: '800px',
+              margin: '0 auto',
+              padding: '15px 20px',
+              borderRadius: '8px',
+              backgroundColor: paymentMessageType === 'success' ? '#d4edda' : '#f8d7da',
+              border: `1px solid ${paymentMessageType === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
+              color: paymentMessageType === 'success' ? '#155724' : '#721c24',
+              textAlign: 'center',
+              fontSize: '14px'
+            }}>
+              {paymentMessage}
+            </div>
+          )}
+
+          {loading && paymentSessionId && (
+            <div style={{
+              textAlign: 'center',
+              marginTop: '20px',
+              color: '#666',
+              fontSize: '14px'
+            }}>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <div style={{
+                  width: '16px',
+                  height: '16px',
+                  border: '2px solid #f3f3f3',
+                  borderTop: '2px solid #0070f3',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }} />
+                <span>Processing payment...</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <style jsx>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }
