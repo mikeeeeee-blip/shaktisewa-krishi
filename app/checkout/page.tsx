@@ -12,6 +12,7 @@ function CheckoutContent() {
   const [upiComponents, setUpiComponents] = useState<any[]>([]);
   const [paymentCompleted, setPaymentCompleted] = useState<boolean>(false);
   const [paymentDetails, setPaymentDetails] = useState<any>(null);
+  const [countdown, setCountdown] = useState<number>(900); // 15 minutes in seconds
 
   /**
    * UPI Intent Support for Cashfree Checkout
@@ -353,6 +354,31 @@ function CheckoutContent() {
     setLoading(false); // Set loading to false after payment data is extracted
   }, [searchParams]);
 
+  // Countdown timer effect
+  useEffect(() => {
+    if (!paymentData) return;
+    
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 0) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [paymentData]);
+
+  // Format countdown as HH:MM:SS
+  const formatCountdown = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
   useEffect(() => {
     // Create Cashfree payment session once payment data is loaded
     if (!paymentData || error) return;
@@ -576,8 +602,8 @@ function CheckoutContent() {
             mode: environment
           });
 
-          // UPI apps to create
-          const upiApps = ['phonepe', 'paytm', 'gpay', 'default', 'web'];
+          // UPI apps to create - only Paytm, PhonePe, and UPI (default)
+          const upiApps = ['phonepe', 'paytm', 'default'];
           const components: any[] = [];
 
           // Create UPI app components
@@ -625,18 +651,6 @@ function CheckoutContent() {
           setUpiComponents(components);
           setLoading(false);
           console.log('✅ UPI components initialized successfully');
-
-          // Automatically trigger the default (Intent) UPI payment after a short delay
-          // This allows the components to fully render before triggering
-          setTimeout(() => {
-            const defaultComponent = components.find(({ upiApp }) => upiApp === 'default');
-            if (defaultComponent) {
-              console.log('🚀 Auto-triggering UPI Intent payment...');
-              initPay(defaultComponent.component, 'default');
-            } else {
-              console.warn('⚠️ Default UPI component not found for auto-trigger');
-            }
-          }, 500); // Small delay to ensure components are fully mounted
         } catch (error: any) {
           console.error('Error initializing UPI components:', error);
           setError(`Failed to initialize payment: ${error.message || 'Unknown error'}`);
@@ -691,7 +705,7 @@ function CheckoutContent() {
     <div style={{ 
       minHeight: '100vh',
       backgroundColor: '#ffffff',
-      padding: '20px',
+      padding: '0',
       fontFamily: 'system-ui, -apple-system, sans-serif'
     }}>
       {loading && !paymentSessionId && (
@@ -755,156 +769,186 @@ function CheckoutContent() {
 
       {paymentSessionId && paymentData && (
         <div style={{
-          maxWidth: '1200px',
-          margin: '0 auto'
+          maxWidth: '600px',
+          margin: '0 auto',
+          padding: '0'
         }}>
+          {/* Dark Blue Header Section */}
           <div style={{
-            marginBottom: '30px',
-            textAlign: 'center'
+            backgroundColor: '#1e3a8a',
+            padding: '20px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            color: '#ffffff'
           }}>
-            <h1 style={{
-              fontSize: '28px',
-              fontWeight: '600',
-              color: '#333',
-              marginBottom: '10px'
-            }}>
-              Complete Your Payment
-            </h1>
-            <div style={{
-              fontSize: '24px',
-              color: '#0070f3',
-              fontWeight: '600'
-            }}>
-              ₹{paymentData.amount.toFixed(2)}
-            </div>
-            {paymentData.description && (
+            <div>
               <div style={{
                 fontSize: '14px',
-                color: '#666',
-                marginTop: '8px'
+                opacity: 0.9,
+                marginBottom: '4px'
               }}>
-                {paymentData.description}
+                Recharge amount
               </div>
-            )}
+              <div style={{
+                fontSize: '24px',
+                fontWeight: '600'
+              }}>
+                ₹{paymentData.amount.toFixed(2)}
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{
+                fontSize: '14px',
+                opacity: 0.9,
+                marginBottom: '4px'
+              }}>
+                Order countdown
+              </div>
+              <div style={{
+                fontSize: '24px',
+                fontWeight: '600',
+                fontFamily: 'monospace'
+              }}>
+                {formatCountdown(countdown)}
+              </div>
+            </div>
           </div>
 
+          {/* Light Grey Payment Method Selection */}
           <div style={{
-            display: 'flex',
-            justifyContent: 'center',
-            marginBottom: '30px'
+            backgroundColor: '#f5f5f5',
+            padding: '20px',
+            marginTop: '0'
           }}>
-            {/* UPI App Selection */}
-            <div style={{
-              padding: '20px',
-              backgroundColor: '#ffffff',
-              borderRadius: '12px',
-              boxShadow: 'rgba(50, 50, 93, 0.25) 0px 30px 60px -12px, rgba(0, 0, 0, 0.3) 0px 18px 36px -18px',
-              maxWidth: '500px',
-              width: '100%'
+            <h3 style={{
+              fontSize: '18px',
+              fontWeight: '600',
+              marginBottom: '20px',
+              color: '#333',
+              textAlign: 'center'
             }}>
-              <h3 style={{
-                fontSize: '18px',
-                fontWeight: '600',
-                marginBottom: '20px',
-                color: '#333',
-                textAlign: 'center'
-              }}>
-                Select Payment App
-              </h3>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
-                gap: '0'
-              }}>
-                {/* PhonePe */}
-                <div 
-                  id="phonepe-container"
-                  style={{
-                    padding: '20px',
-                    textAlign: 'center',
-                    borderTop: '1px solid #efefef',
-                    borderRight: '1px solid #efefef',
-                    cursor: 'pointer',
-                    transition: 'background-color 0.2s'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                >
-                  <div id="phonepe" style={{ width: '34px', margin: '0 auto', minHeight: '34px' }}></div>
-                  <div style={{ marginTop: '10px', fontSize: '14px', color: '#333' }}>PhonePe</div>
+              Choose Payment Method
+            </h3>
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px'
+            }}>
+              {/* Paytm */}
+              <div 
+                id="paytm-container"
+                style={{
+                  padding: '16px',
+                  backgroundColor: '#ffffff',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div id="paytm" style={{ width: '40px', height: '40px', minHeight: '40px' }}></div>
+                  <span style={{ fontSize: '16px', color: '#333', fontWeight: '500' }}>Paytm</span>
                 </div>
-
-                {/* Paytm */}
-                <div 
-                  id="paytm-container"
-                  style={{
-                    padding: '20px',
-                    textAlign: 'center',
-                    borderTop: '1px solid #efefef',
-                    cursor: 'pointer',
-                    transition: 'background-color 0.2s'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                >
-                  <div id="paytm" style={{ width: '34px', margin: '0 auto', minHeight: '34px' }}></div>
-                  <div style={{ marginTop: '10px', fontSize: '14px', color: '#333' }}>Paytm</div>
+                <div style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  border: '2px solid #e5e7eb',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <div style={{
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    backgroundColor: '#e5e7eb'
+                  }}></div>
                 </div>
+              </div>
 
-                {/* Google Pay */}
-                <div 
-                  id="gpay-container"
-                  style={{
-                    padding: '20px',
-                    textAlign: 'center',
-                    borderTop: '1px solid #efefef',
-                    borderRight: '1px solid #efefef',
-                    borderBottom: '1px solid #efefef',
-                    cursor: 'pointer',
-                    transition: 'background-color 0.2s'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                >
-                  <div id="gpay" style={{ width: '34px', margin: '0 auto', minHeight: '34px' }}></div>
-                  <div style={{ marginTop: '10px', fontSize: '14px', color: '#333' }}>Google Pay</div>
+              {/* PhonePe */}
+              <div 
+                id="phonepe-container"
+                style={{
+                  padding: '16px',
+                  backgroundColor: '#ffffff',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div id="phonepe" style={{ width: '40px', height: '40px', minHeight: '40px' }}></div>
+                  <span style={{ fontSize: '16px', color: '#333', fontWeight: '500' }}>Phonepe</span>
                 </div>
-
-                {/* Intent (Default) */}
-                <div 
-                  id="default-container"
-                  style={{
-                    padding: '20px',
-                    textAlign: 'center',
-                    borderTop: '1px solid #efefef',
-                    borderBottom: '1px solid #efefef',
-                    cursor: 'pointer',
-                    transition: 'background-color 0.2s'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                >
-                  <div id="default" style={{ width: '34px', margin: '0 auto', minHeight: '34px' }}></div>
-                  <div style={{ marginTop: '10px', fontSize: '14px', color: '#333' }}>Intent</div>
+                <div style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  border: '2px solid #e5e7eb',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <div style={{
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    backgroundColor: '#e5e7eb'
+                  }}></div>
                 </div>
+              </div>
 
-                {/* Web Link */}
-                <div 
-                  id="web-container"
-                  style={{
-                    padding: '20px',
-                    textAlign: 'center',
-                    borderRight: '1px solid #efefef',
-                    borderBottom: '1px solid #efefef',
-                    cursor: 'pointer',
-                    transition: 'background-color 0.2s',
-                    gridColumn: 'span 2'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                >
-                  <div id="web" style={{ width: '34px', margin: '0 auto', minHeight: '34px' }}></div>
-                  <div style={{ marginTop: '10px', fontSize: '14px', color: '#333' }}>Link</div>
+              {/* UPI (combines default/intent and web) */}
+              <div 
+                id="default-container"
+                style={{
+                  padding: '16px',
+                  backgroundColor: '#ffffff',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8f9fa'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div id="default" style={{ width: '40px', height: '40px', minHeight: '40px' }}></div>
+                  <span style={{ fontSize: '16px', color: '#333', fontWeight: '500' }}>Upi</span>
+                </div>
+                <div style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  border: '2px solid #e5e7eb',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <div style={{
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    backgroundColor: '#e5e7eb'
+                  }}></div>
                 </div>
               </div>
             </div>
