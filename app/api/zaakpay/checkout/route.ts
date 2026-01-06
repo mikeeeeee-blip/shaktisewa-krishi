@@ -252,12 +252,21 @@ export async function GET(request: NextRequest) {
         paymentMode: paymentInstrument.paymentMode,
         firstName: paymentData.orderDetail.firstName,
         lastName: paymentData.orderDetail.lastName,
-        returnUrl: paymentData.returnUrl
+        returnUrl: paymentData.returnUrl,
+        merchantId: MERCHANT_ID ? MERCHANT_ID.substring(0, 15) + '...' : 'NOT SET'
       });
 
       const formData = querystring.stringify({
         data: dataString,
         checksum: checksum
+      });
+
+      console.log('📤 Request details:', {
+        endpoint: TRANSACT_ENDPOINT,
+        mode: MODE,
+        dataLength: dataString.length,
+        formDataLength: formData.length,
+        checksum: checksum.substring(0, 20) + '...'
       });
 
       try {
@@ -266,12 +275,27 @@ export async function GET(request: NextRequest) {
 
         const startTime = Date.now();
         console.log('⏱️  Calling Zaakpay API at:', TRANSACT_ENDPOINT);
+        console.log('📋 Full request URL:', TRANSACT_ENDPOINT);
+        console.log('📋 Request method: POST');
+        console.log('📋 Content-Type: application/x-www-form-urlencoded');
 
         // Use shorter timeout for faster failure - Zaakpay should respond quickly
         const apiTimeout = MODE === 'production' ? 15000 : 20000; // 20s staging, 15s production
         const connectionTimeout = MODE === 'production' ? 5000 : 8000; // 8s staging, 5s production
         
         console.log('⏱️  Timeout settings:', { apiTimeout, connectionTimeout, mode: MODE });
+        
+        // Test connection first (quick HEAD request)
+        try {
+          console.log('🔍 Testing connection to Zaakpay...');
+          const testResponse = await axios.head(BASE_URL, {
+            timeout: 3000,
+            validateStatus: () => true
+          });
+          console.log('✅ Connection test passed (status:', testResponse.status + ')');
+        } catch (testError: any) {
+          console.warn('⚠️ Connection test failed (will still try full request):', testError.code || testError.message);
+        }
 
         const response = await axios.post(TRANSACT_ENDPOINT, formData, {
           headers: {
@@ -383,9 +407,15 @@ export async function GET(request: NextRequest) {
         });
         
         if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+          const elapsed = Date.now() - startTime;
+          console.error('❌ Timeout after', elapsed, 'ms');
+          console.error('   Endpoint:', TRANSACT_ENDPOINT);
+          console.error('   Mode:', MODE);
+          console.error('   Error code:', error.code);
+          
           const timeoutMessage = MODE === 'production' 
-            ? 'Zaakpay API is taking too long to respond. This might be a temporary issue. Please try again in a moment or contact support if the problem persists.'
-            : 'Zaakpay staging API is slow or unresponsive. Please try again or contact Zaakpay support if this continues.';
+            ? `Zaakpay production API (${TRANSACT_ENDPOINT}) is taking too long to respond (timed out after ${Math.round(elapsed/1000)}s). This might be a temporary issue with Zaakpay's servers. Please try again in a moment or contact Zaakpay support.`
+            : `Zaakpay staging API (${TRANSACT_ENDPOINT}) is slow or unresponsive (timed out after ${Math.round(elapsed/1000)}s). Please try again or contact Zaakpay support if this continues.`;
           
           return NextResponse.json(
             {
@@ -393,9 +423,31 @@ export async function GET(request: NextRequest) {
               error: timeoutMessage,
               code: 'TIMEOUT',
               retry: true,
-              endpoint: TRANSACT_ENDPOINT
+              endpoint: TRANSACT_ENDPOINT,
+              elapsed: elapsed,
+              details: {
+                endpoint: TRANSACT_ENDPOINT,
+                mode: MODE,
+                timeout: apiTimeout,
+                errorCode: error.code
+              }
             },
             { status: 504 }
+          );
+        }
+        
+        // Network errors
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+          console.error('❌ Network error:', error.code, error.message);
+          return NextResponse.json(
+            {
+              success: false,
+              error: `Network error: Could not connect to Zaakpay API (${error.code}). Please check your internet connection or contact support.`,
+              code: 'NETWORK_ERROR',
+              endpoint: TRANSACT_ENDPOINT,
+              errorCode: error.code
+            },
+            { status: 503 }
           );
         }
 
