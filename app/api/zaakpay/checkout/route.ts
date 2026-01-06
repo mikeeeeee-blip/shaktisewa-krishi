@@ -267,20 +267,26 @@ export async function GET(request: NextRequest) {
         const startTime = Date.now();
         console.log('⏱️  Calling Zaakpay API at:', TRANSACT_ENDPOINT);
 
+        // Use shorter timeout for faster failure - Zaakpay should respond quickly
+        const apiTimeout = MODE === 'production' ? 15000 : 20000; // 20s staging, 15s production
+        const connectionTimeout = MODE === 'production' ? 5000 : 8000; // 8s staging, 5s production
+        
+        console.log('⏱️  Timeout settings:', { apiTimeout, connectionTimeout, mode: MODE });
+
         const response = await axios.post(TRANSACT_ENDPOINT, formData, {
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             'Accept': 'application/json',
             'User-Agent': 'Zaakpay-Integration/1.0'
           },
-          timeout: MODE === 'production' ? 25000 : 35000, // 35s for staging, 25s for production
+          timeout: apiTimeout,
           maxRedirects: 0,
           httpAgent: new http.Agent({
-            timeout: MODE === 'production' ? 8000 : 12000,
+            timeout: connectionTimeout,
             keepAlive: false
           }),
           httpsAgent: new https.Agent({
-            timeout: MODE === 'production' ? 8000 : 12000,
+            timeout: connectionTimeout,
             keepAlive: false,
             rejectUnauthorized: true
           })
@@ -369,15 +375,25 @@ export async function GET(request: NextRequest) {
           { status: 400 }
         );
       } catch (error: any) {
-        console.error('❌ Zaakpay API error:', error.message);
+        console.error('❌ Zaakpay API error:', {
+          code: error.code,
+          message: error.message,
+          endpoint: TRANSACT_ENDPOINT,
+          mode: MODE
+        });
         
         if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+          const timeoutMessage = MODE === 'production' 
+            ? 'Zaakpay API is taking too long to respond. This might be a temporary issue. Please try again in a moment or contact support if the problem persists.'
+            : 'Zaakpay staging API is slow or unresponsive. Please try again or contact Zaakpay support if this continues.';
+          
           return NextResponse.json(
             {
               success: false,
-              error: 'Zaakpay API timeout: The API took too long to respond. Please try again.',
+              error: timeoutMessage,
               code: 'TIMEOUT',
-              retry: true
+              retry: true,
+              endpoint: TRANSACT_ENDPOINT
             },
             { status: 504 }
           );
