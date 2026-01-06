@@ -26,7 +26,23 @@ console.log('🔧 Zaakpay Configuration:', {
   merchantId: MERCHANT_ID ? MERCHANT_ID.substring(0, 15) + '...' : 'NOT SET'
 });
 
-const KRISHI_API_URL = process.env.KRISHI_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+// Get base API URL and normalize it
+// Remove /api/v1 suffix if present since zaakpay routes are at /api/zaakpay
+function getServerBaseUrl(): string {
+  const baseUrl = process.env.KRISHI_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+  
+  // Remove trailing slashes
+  let normalized = baseUrl.replace(/\/+$/, '');
+  
+  // If URL ends with /api/v1, remove it (zaakpay routes are at /api/zaakpay, not /api/v1/api/zaakpay)
+  if (normalized.endsWith('/api/v1')) {
+    normalized = normalized.replace(/\/api\/v1$/, '');
+  }
+  
+  return normalized;
+}
+
+const KRISHI_API_URL = getServerBaseUrl();
 
 function hmacSha256(dataString: string): string {
   return crypto.createHmac('sha256', SECRET_KEY || '').update(dataString, 'utf8').digest('hex');

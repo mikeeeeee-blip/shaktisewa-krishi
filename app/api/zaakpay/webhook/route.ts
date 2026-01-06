@@ -3,7 +3,18 @@ import axios from 'axios';
 import crypto from 'crypto';
 
 const MODE = (process.env.ZACKPAY_MODE || '').toLowerCase() === 'production' ? 'production' : 'test';
-const KRISHI_API_URL = process.env.KRISHI_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+
+// Get base API URL and normalize it (remove /api/v1 if present)
+function getServerBaseUrl(): string {
+  const baseUrl = process.env.KRISHI_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+  let normalized = baseUrl.replace(/\/+$/, '');
+  if (normalized.endsWith('/api/v1')) {
+    normalized = normalized.replace(/\/api\/v1$/, '');
+  }
+  return normalized;
+}
+
+const KRISHI_API_URL = getServerBaseUrl();
 const SECRET_KEY = MODE === 'production'
   ? process.env.ZACKPAY_SECRET_KEY
   : (process.env.ZACKPAY_SECRET_KEY_TEST || process.env.ZACKPAY_SECRET_KEY);
