@@ -1,11 +1,11 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 
 type Option = 'upi' | 'gpay' | 'phonepe' | 'paytm';
 
-export default function ZaakpayCheckoutPage() {
+function ZaakpayCheckoutContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const transactionId = searchParams.get('transaction_id') || searchParams.get('transactionId') || '';
@@ -305,5 +305,22 @@ export default function ZaakpayCheckoutPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function ZaakpayCheckoutPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading payment options...</p>
+          </div>
+        </div>
+      }
+    >
+      <ZaakpayCheckoutContent />
+    </Suspense>
   );
 }
