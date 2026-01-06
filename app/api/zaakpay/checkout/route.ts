@@ -29,7 +29,10 @@ console.log('🔧 Zaakpay Configuration:', {
 // Get base API URL and normalize it
 // Remove /api/v1 suffix if present since zaakpay routes are at /api/zaakpay
 function getServerBaseUrl(): string {
-  const baseUrl = process.env.KRISHI_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+  const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 
+                  process.env.KRISHI_API_URL || 
+                  process.env.NEXT_PUBLIC_API_URL || 
+                  'http://localhost:5001';
   
   // Remove trailing slashes
   let normalized = baseUrl.replace(/\/+$/, '');
@@ -42,7 +45,7 @@ function getServerBaseUrl(): string {
   return normalized;
 }
 
-const KRISHI_API_URL = getServerBaseUrl();
+const SERVER_BASE_URL = getServerBaseUrl();
 
 function hmacSha256(dataString: string): string {
   return crypto.createHmac('sha256', SECRET_KEY || '').update(dataString, 'utf8').digest('hex');
@@ -92,7 +95,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch transaction from backend API
     const transactionResponse = await axios.get(
-      `${KRISHI_API_URL}/api/zaakpay/transaction/${transactionId}`,
+      `${SERVER_BASE_URL}/api/zaakpay/transaction/${transactionId}`,
       {
         headers: {
           'Content-Type': 'application/json'
@@ -141,15 +144,12 @@ export async function GET(request: NextRequest) {
       nextJsUrl = process.env.ZACKPAY_CALLBACK_URL_PRODUCTION ||
                   process.env.ZACKPAY_WEBSITE_URL ||
                   process.env.NEXT_PUBLIC_API_URL ||
-                  process.env.KRISHI_API_URL ||
-                  process.env.ZACKPAY_CALLBACK_URL ||
                   'https://www.shaktisewafoudation.in';
     } else {
       // Test/Staging: Use test callback URL or ngrok
       nextJsUrl = process.env.ZACKPAY_CALLBACK_URL_TEST ||
                   process.env.ZACKPAY_CALLBACK_URL ||
                   process.env.NEXT_PUBLIC_API_URL ||
-                  process.env.KRISHI_API_URL ||
                   'http://localhost:3001';
     }
     

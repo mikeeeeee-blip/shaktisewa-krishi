@@ -6,7 +6,10 @@ const MODE = (process.env.ZACKPAY_MODE || '').toLowerCase() === 'production' ? '
 
 // Get base API URL and normalize it (remove /api/v1 if present)
 function getServerBaseUrl(): string {
-  const baseUrl = process.env.KRISHI_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+  const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 
+                  process.env.KRISHI_API_URL || 
+                  process.env.NEXT_PUBLIC_API_URL || 
+                  'http://localhost:5001';
   let normalized = baseUrl.replace(/\/+$/, '');
   if (normalized.endsWith('/api/v1')) {
     normalized = normalized.replace(/\/api\/v1$/, '');
@@ -14,7 +17,7 @@ function getServerBaseUrl(): string {
   return normalized;
 }
 
-const KRISHI_API_URL = getServerBaseUrl();
+const SERVER_BASE_URL = getServerBaseUrl();
 const SECRET_KEY = MODE === 'production'
   ? process.env.ZACKPAY_SECRET_KEY
   : (process.env.ZACKPAY_SECRET_KEY_TEST || process.env.ZACKPAY_SECRET_KEY);
@@ -88,7 +91,7 @@ export async function POST(request: NextRequest) {
     // Forward webhook to server to update transaction
     try {
       const serverResponse = await axios.post(
-        `${KRISHI_API_URL}/api/zaakpay/webhook`,
+        `${SERVER_BASE_URL}/api/zaakpay/webhook`,
         {
           data: data || JSON.stringify(webhookData),
           checksum: checksum,
