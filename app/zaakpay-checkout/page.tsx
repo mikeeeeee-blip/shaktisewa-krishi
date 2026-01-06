@@ -95,9 +95,9 @@ function ZaakpayCheckoutContent() {
 
       console.log(`Fetching ${selectedOption} intent URL...`);
       
-      // Add timeout to fetch request (20 seconds - shorter for faster failure)
+      // Add timeout to fetch request (35 seconds to match backend timeout)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      const timeoutId = setTimeout(() => controller.abort(), 35000);
       
       const response = await fetch(`/api/zaakpay/checkout?${params.toString()}`, {
         signal: controller.signal

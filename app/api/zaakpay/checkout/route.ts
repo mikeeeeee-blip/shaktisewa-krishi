@@ -273,9 +273,10 @@ export async function GET(request: NextRequest) {
       const https = require('https');
       const startTime = Date.now();
       
-      // Use shorter timeout for faster failure - Zaakpay should respond quickly
-      const apiTimeout = MODE === 'production' ? 15000 : 20000; // 20s staging, 15s production
-      const connectionTimeout = MODE === 'production' ? 5000 : 8000; // 8s staging, 5s production
+        // Increase timeout - Zaakpay production API can be slow (connection test passes, so server is reachable)
+        // The POST request processing on Zaakpay's side takes time
+        const apiTimeout = MODE === 'production' ? 30000 : 35000; // 35s staging, 30s production  
+        const connectionTimeout = MODE === 'production' ? 10000 : 12000; // 12s staging, 10s production
       
       console.log('⏱️  Calling Zaakpay API at:', TRANSACT_ENDPOINT);
       console.log('📋 Full request URL:', TRANSACT_ENDPOINT);
@@ -296,24 +297,67 @@ export async function GET(request: NextRequest) {
           console.warn('⚠️ Connection test failed (will still try full request):', testError.code || testError.message);
         }
 
-        const response = await axios.post(TRANSACT_ENDPOINT, formData, {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Accept': 'application/json',
-            'User-Agent': 'Zaakpay-Integration/1.0'
-          },
-          timeout: apiTimeout,
-          maxRedirects: 0,
-          httpAgent: new http.Agent({
-            timeout: connectionTimeout,
-            keepAlive: false
-          }),
-          httpsAgent: new https.Agent({
-            timeout: connectionTimeout,
-            keepAlive: false,
-            rejectUnauthorized: true
-          })
-        });
+        // Retry logic for Zaakpay API (up to 2 retries)
+        const maxRetries = 2;
+        let lastError: any = null;
+        let response: any = null;
+        
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            if (attempt > 0) {
+              console.log(`🔄 Retry attempt ${attempt}/${maxRetries}...`);
+              // Wait before retry (exponential backoff: 1s, 2s)
+              await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            }
+            
+            const attemptStartTime = Date.now();
+            console.log(`📤 Attempt ${attempt + 1}: Making POST request to Zaakpay...`);
+            
+            response = await axios.post(TRANSACT_ENDPOINT, formData, {
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'application/json',
+                'User-Agent': 'Zaakpay-Integration/1.0',
+                'Connection': 'close' // Force close connection after request
+              },
+              timeout: apiTimeout,
+              maxRedirects: 0,
+              httpAgent: new http.Agent({
+                timeout: connectionTimeout,
+                keepAlive: false,
+                maxSockets: 1
+              }),
+              httpsAgent: new https.Agent({
+                timeout: connectionTimeout,
+                keepAlive: false,
+                rejectUnauthorized: true,
+                maxSockets: 1
+              })
+            });
+            
+            const attemptElapsed = Date.now() - attemptStartTime;
+            console.log(`✅ Attempt ${attempt + 1} succeeded in ${attemptElapsed}ms`);
+            break; // Success, exit retry loop
+            
+          } catch (attemptError: any) {
+            lastError = attemptError;
+            const isTimeout = attemptError.code === 'ECONNABORTED' || 
+                            attemptError.message?.includes('timeout') ||
+                            attemptError.name === 'AbortError';
+            
+            if (isTimeout && attempt < maxRetries) {
+              console.warn(`⚠️ Attempt ${attempt + 1} timed out, will retry...`);
+              continue; // Retry
+            } else {
+              // Non-timeout error or all retries exhausted
+              throw attemptError;
+            }
+          }
+        }
+        
+        if (!response) {
+          throw lastError || new Error('All retry attempts failed');
+        }
 
         const elapsed = Date.now() - startTime;
         console.log(`✅ Zaakpay API responded in ${elapsed}ms`);
