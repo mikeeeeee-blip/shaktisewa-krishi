@@ -269,22 +269,21 @@ export async function GET(request: NextRequest) {
         checksum: checksum.substring(0, 20) + '...'
       });
 
+      const http = require('http');
+      const https = require('https');
+      const startTime = Date.now();
+      
+      // Use shorter timeout for faster failure - Zaakpay should respond quickly
+      const apiTimeout = MODE === 'production' ? 15000 : 20000; // 20s staging, 15s production
+      const connectionTimeout = MODE === 'production' ? 5000 : 8000; // 8s staging, 5s production
+      
+      console.log('⏱️  Calling Zaakpay API at:', TRANSACT_ENDPOINT);
+      console.log('📋 Full request URL:', TRANSACT_ENDPOINT);
+      console.log('📋 Request method: POST');
+      console.log('📋 Content-Type: application/x-www-form-urlencoded');
+      console.log('⏱️  Timeout settings:', { apiTimeout, connectionTimeout, mode: MODE });
+      
       try {
-        const http = require('http');
-        const https = require('https');
-
-        const startTime = Date.now();
-        console.log('⏱️  Calling Zaakpay API at:', TRANSACT_ENDPOINT);
-        console.log('📋 Full request URL:', TRANSACT_ENDPOINT);
-        console.log('📋 Request method: POST');
-        console.log('📋 Content-Type: application/x-www-form-urlencoded');
-
-        // Use shorter timeout for faster failure - Zaakpay should respond quickly
-        const apiTimeout = MODE === 'production' ? 15000 : 20000; // 20s staging, 15s production
-        const connectionTimeout = MODE === 'production' ? 5000 : 8000; // 8s staging, 5s production
-        
-        console.log('⏱️  Timeout settings:', { apiTimeout, connectionTimeout, mode: MODE });
-        
         // Test connection first (quick HEAD request)
         try {
           console.log('🔍 Testing connection to Zaakpay...');
