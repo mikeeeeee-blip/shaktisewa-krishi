@@ -379,68 +379,34 @@ export async function GET(request: NextRequest) {
       returnUrl: returnUrl
     });
     
-    // ✅ OFFICIAL ZAAKPAY FORM SUBMISSION
+    // ✅ OFFICIAL ZAAKPAY FORM SUBMISSION - OPTIMIZED FOR SPEED
     // Send individual form fields (not JSON in "data" field)
-    // Reference: zaakpay-nodejs-integration-main/client/src/file/zaakpay/ZaakPay.js
+    // Minimal HTML - no loading UI, immediate form submission
     const html = `<!DOCTYPE html>
 <html>
 <head>
-    <title>Redirecting to Zaakpay...</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            background: #f5f5f5; 
-            padding: 20px; 
-            margin: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-        }
-        .container { 
-            text-align: center; 
-            background: white; 
-            padding: 40px; 
-            border-radius: 8px; 
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            max-width: 500px;
-        }
-        .spinner { 
-            border: 4px solid #f3f3f3; 
-            border-top: 4px solid #3498db; 
-            border-radius: 50%; 
-            width: 50px; 
-            height: 50px; 
-            animation: spin 1s linear infinite; 
-            margin: 0 auto 20px;
-        }
-        @keyframes spin { 
-            0% { transform: rotate(0deg); } 
-            100% { transform: rotate(360deg); } 
-        }
-        h2 { color: #333; margin: 0 0 10px 0; }
-        p { color: #666; margin: 0; }
+        body { margin: 0; padding: 0; background: #fff; }
+        .loader { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #fff; }
+        .spinner { width: 24px; height: 24px; border: 2px solid #e0e0e0; border-top-color: #3498db; border-radius: 50%; animation: spin 0.6s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="spinner"></div>
-        <h2>Redirecting to Payment Gateway...</h2>
-        <p>Please wait while we redirect you to the secure payment page.</p>
-    </div>
+    <div class="loader"><div class="spinner"></div></div>
     <form method="POST" action="${TRANSACT_ENDPOINT}" enctype="application/x-www-form-urlencoded" style="display:none;">
         ${Object.entries(paymentData)
           .filter(([key, value]) => value !== undefined && value !== null && value !== '')
           .map(([key, value]) => 
             `<input type="hidden" name="${key}" value="${String(value).replace(/"/g, '&quot;').replace(/'/g, '&apos;')}" />`
-          ).join('\n        ')}
+          ).join('')}
         <input type="hidden" name="checksum" value="${checksum}" />
     </form>
     <script>
-        // ✅ Simple auto-submit - NO data manipulation
-        document.forms[0].submit();
+        // Immediate auto-submit - no delay
+        (function(){document.forms[0].submit();})();
     </script>
 </body>
 </html>`;
