@@ -12,12 +12,9 @@ const SECRET_KEY = MODE === 'production'
 
 // Zaakpay endpoint configuration - Official Integration Pattern
 // Reference: zaakpay-nodejs-integration-main/routes/zaakpay/config.js
-// Using api.zaakpay.com as the base URL
-// Staging: https://zaakstaging.zaakpay.com/api/paymentTransact/V8
-// Production: https://api.zaakpay.com/api/paymentTransact/V8
-const BASE_URL = MODE === 'production'
-  ? 'https://api.zaakpay.com'
-  : 'https://zaakstaging.zaakpay.com';
+// ALWAYS use production endpoint: https://api.zaakpay.com/api/paymentTransact/V8
+// Test credentials work on production endpoint when mode=0
+const BASE_URL = 'https://api.zaakpay.com';
 const TRANSACT_ENDPOINT = `${BASE_URL}/api/paymentTransact/V8`;
 
 // Log endpoint configuration
