@@ -109,18 +109,34 @@ async function handleCallback(request: NextRequest) {
         }
       );
       
-      // Server returns redirect, but we need to handle it ourselves
-      // Check if transaction was updated successfully
-      if (serverResponse.status === 200 || serverResponse.status === 302) {
-        // Transaction was processed, redirect based on response code
-        if (responseCode === '100' || responseCode === 100 || responseCode === '208') {
-          const successUrl = getAbsoluteUrl(`/payment-success?transaction_id=${transactionId || orderId || ''}`);
+      // Server returns JSON with transaction status
+      if (serverResponse.data?.success) {
+        const transaction = serverResponse.data.transaction;
+        console.log('✅ Server processed callback successfully:', {
+          transactionId: transaction.transactionId,
+          status: transaction.status,
+          responseCode: transaction.responseCode
+        });
+        
+        // Redirect based on transaction status from server
+        if (transaction.status === 'paid' || transaction.status === 'success' || transaction.status === 'completed') {
+          const successUrl = getAbsoluteUrl(`/payment-success?transaction_id=${transaction.transactionId || transactionId || orderId || ''}`);
           return NextResponse.redirect(successUrl);
         } else {
-          const errorMsg = callbackParams.responseDescription || callbackParams.response_description || 'Payment failed';
-          const failureUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent(errorMsg)}&transaction_id=${transactionId || orderId || ''}`);
+          const errorMsg = transaction.responseDescription || callbackParams.responseDescription || callbackParams.response_description || 'Payment failed';
+          const failureUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent(errorMsg)}&transaction_id=${transaction.transactionId || transactionId || orderId || ''}`);
           return NextResponse.redirect(failureUrl);
         }
+      }
+      
+      // Fallback: redirect based on response code
+      if (responseCode === '100' || responseCode === 100 || responseCode === '208') {
+        const successUrl = getAbsoluteUrl(`/payment-success?transaction_id=${transactionId || orderId || ''}`);
+        return NextResponse.redirect(successUrl);
+      } else {
+        const errorMsg = callbackParams.responseDescription || callbackParams.response_description || 'Payment failed';
+        const failureUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent(errorMsg)}&transaction_id=${transactionId || orderId || ''}`);
+        return NextResponse.redirect(failureUrl);
       }
     } catch (serverError: any) {
       console.error('❌ Error forwarding callback to server:', serverError.message);
