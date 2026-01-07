@@ -153,24 +153,58 @@ export async function GET(request: NextRequest) {
 
     // Build returnUrl - use Next.js API route for callback (not server)
     // Must be on the same domain as Website URL in Zaakpay dashboard
+    // According to Zaakpay docs: returnUrl must be on the same domain as Website URL
     // Supports both test and production modes
-    let nextJsUrl: string;
-    
-    if (MODE === 'production') {
-      // Production: Use production callback URL (must match Website URL domain)
-      nextJsUrl = process.env.ZACKPAY_CALLBACK_URL_PRODUCTION ||
+    function getNextJsBaseUrl(): string {
+      let baseUrl: string;
+      
+      if (MODE === 'production') {
+        // Production: Use production callback URL (must match Website URL domain)
+        baseUrl = process.env.ZACKPAY_CALLBACK_URL_PRODUCTION ||
                   process.env.ZACKPAY_WEBSITE_URL ||
+                  process.env.NEXT_PUBLIC_WEBSITE_URL ||
                   process.env.NEXT_PUBLIC_API_URL ||
                   'https://www.shaktisewafoudation.in';
-    } else {
-      // Test/Staging: Use test callback URL or ngrok
-      nextJsUrl = process.env.ZACKPAY_CALLBACK_URL_TEST ||
+      } else {
+        // Test/Staging: Use test callback URL or ngrok
+        baseUrl = process.env.ZACKPAY_CALLBACK_URL_TEST ||
                   process.env.ZACKPAY_CALLBACK_URL ||
+                  process.env.NEXT_PUBLIC_WEBSITE_URL ||
                   process.env.NEXT_PUBLIC_API_URL ||
                   'http://localhost:3001';
+      }
+      
+      // Normalize the URL - remove trailing slashes
+      let normalized = baseUrl.replace(/\/+$/, '');
+      
+      // CRITICAL: Remove /api/v1 if present (this is for server API, not Next.js app)
+      // Next.js app routes are at /api/zaakpay/callback, not /api/v1/api/zaakpay/callback
+      if (normalized.endsWith('/api/v1')) {
+        normalized = normalized.replace(/\/api\/v1$/, '');
+      }
+      
+      // Also remove /api if it's a server API URL (not Next.js app)
+      // If URL contains 'api-krishi' or 'vercel.app/api', it's likely the server API, not the Next.js app
+      if (normalized.includes('api-krishi') || normalized.includes('vercel.app/api')) {
+        // Use the production website URL instead
+        normalized = MODE === 'production' 
+          ? 'https://www.shaktisewafoudation.in'
+          : (process.env.NEXT_PUBLIC_WEBSITE_URL || 'http://localhost:3001');
+      }
+      
+      return normalized;
     }
     
-    const returnUrl = `${nextJsUrl.replace(/\/$/, '')}/api/zaakpay/callback?transaction_id=${transactionId}`;
+    const nextJsUrl = getNextJsBaseUrl();
+    let returnUrl = `${nextJsUrl}/api/zaakpay/callback?transaction_id=${transactionId}`;
+    
+    // Validate and fix returnUrl format if needed
+    if (returnUrl.includes('/api/v1/api/')) {
+      console.error('❌ ERROR: returnUrl contains duplicate /api/v1/api/ path!');
+      console.error('   This indicates incorrect URL normalization. Fixing...');
+      returnUrl = returnUrl.replace('/api/v1/api/', '/api/');
+      console.log('   Corrected returnUrl:', returnUrl);
+    }
     
     // Warn if using localhost
     if ((returnUrl.includes('localhost') || returnUrl.includes('127.0.0.1'))) {
@@ -186,7 +220,8 @@ export async function GET(request: NextRequest) {
     console.log('🔗 Return URL configured:', {
       mode: MODE,
       url: returnUrl,
-      baseUrl: nextJsUrl
+      baseUrl: nextJsUrl,
+      note: 'Must be on same domain as Website URL in Zaakpay dashboard'
     });
     
     const amountPaisa = Math.round(transaction.amount * 100).toString();
