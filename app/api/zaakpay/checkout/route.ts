@@ -122,17 +122,34 @@ export async function GET(request: NextRequest) {
 
     // Extract and validate customer name (force plain text)
     const rawCustomerName = String(transaction.customerName || '').trim();
+    
+    console.log('🔍 [CHECKOUT] Extracting customer name from transaction:');
+    console.log('   Transaction ID:', transactionId);
+    console.log('   Raw customerName from DB:', rawCustomerName);
+    console.log('   Length:', rawCustomerName.length);
+    console.log('   Looks like base64:', isBase64(rawCustomerName));
+    
     const customerName = forcePlainTextName(rawCustomerName, 'Customer');
     const nameParts = customerName.split(' ').filter(p => p && p.trim().length > 0);
     let firstName = forcePlainTextName(nameParts[0] || customerName, 'Customer');
     let lastName = forcePlainTextName(nameParts.slice(1).join(' '), '');
 
+    console.log('   After forcePlainTextName - customerName:', customerName);
+    console.log('   After forcePlainTextName - firstName:', firstName);
+    console.log('   After forcePlainTextName - lastName:', lastName);
+
     if (firstName.length > 50 || isBase64(firstName)) {
+      console.warn('⚠️ [CHECKOUT] firstName validation failed, using fallback');
       firstName = 'Customer';
     }
     if (lastName.length > 50 || (lastName.length > 0 && isBase64(lastName))) {
+      console.warn('⚠️ [CHECKOUT] lastName validation failed, setting to empty');
       lastName = '';
     }
+    
+    console.log('✅ [CHECKOUT] Final extracted names:');
+    console.log('   firstName:', firstName, '(length:', firstName.length + ', isBase64:', isBase64(firstName) + ')');
+    console.log('   lastName:', lastName, '(length:', lastName.length + ', isBase64:', isBase64(lastName) + ')');
 
     // Build returnUrl - use Next.js API route for callback (not server)
     // Must be on the same domain as Website URL in Zaakpay dashboard
@@ -230,12 +247,97 @@ export async function GET(request: NextRequest) {
       shippingAddress: { city: 'NA' }
     };
 
+    // CRITICAL: Verify the payment data before stringifying
+    console.log('📤 [CHECKOUT] Payment data before stringify:');
+    console.log('   firstName:', paymentData.orderDetail.firstName, '(type:', typeof paymentData.orderDetail.firstName + ', length:', paymentData.orderDetail.firstName.length + ')');
+    console.log('   lastName:', paymentData.orderDetail.lastName, '(type:', typeof paymentData.orderDetail.lastName + ', length:', paymentData.orderDetail.lastName.length + ')');
+    console.log('   isBase64(firstName):', isBase64(paymentData.orderDetail.firstName));
+    console.log('   isBase64(lastName):', isBase64(paymentData.orderDetail.lastName));
+    
     // For hosted checkout: Redirect directly to Zaakpay without custom page
     // Build form data and redirect to Zaakpay's hosted checkout (Express Checkout)
     // This avoids API timeout issues by using Zaakpay's hosted page
     const dataString = JSON.stringify(paymentData);
+    
+    // CRITICAL: Double-check the JSON string doesn't contain encrypted values
+    const firstNameMatch = dataString.match(/"firstName":"([^"]+)"/);
+    const lastNameMatch = dataString.match(/"lastName":"([^"]+)"/);
+    const firstNameInJson = firstNameMatch ? firstNameMatch[1] : null;
+    const lastNameInJson = lastNameMatch ? lastNameMatch[1] : null;
+    
+    console.log('🔍 [CHECKOUT] Verifying JSON string:');
+    console.log('   firstName in JSON:', firstNameInJson);
+    console.log('   lastName in JSON:', lastNameInJson);
+    console.log('   firstName isBase64:', firstNameInJson ? isBase64(firstNameInJson) : 'N/A');
+    console.log('   lastName isBase64:', lastNameInJson ? isBase64(lastNameInJson) : 'N/A');
+    
+    if (firstNameInJson && (isBase64(firstNameInJson) || firstNameInJson.length > 50)) {
+      console.error('❌ [CHECKOUT] CRITICAL: firstName in JSON is encrypted or invalid!');
+      console.error('   Value:', firstNameInJson);
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Invalid customer name detected. Please create a new payment link with plain text customer name.',
+          code: 'ENCRYPTED_NAME_DETECTED'
+        },
+        { status: 400 }
+      );
+    }
+    
+    if (lastNameInJson && lastNameInJson.length > 0 && (isBase64(lastNameInJson) || lastNameInJson.length > 50)) {
+      console.warn('⚠️ [CHECKOUT] lastName in JSON looks encrypted, setting to empty');
+      paymentData.orderDetail.lastName = '';
+      // Re-stringify with corrected lastName
+      const correctedDataString = JSON.stringify(paymentData);
+      const checksum = hmacSha256(correctedDataString);
+      
+      console.log('✅ [CHECKOUT] Corrected payment data - lastName set to empty');
+      console.log('📤 [CHECKOUT] Final data being sent to Zaakpay:');
+      console.log('   firstName:', paymentData.orderDetail.firstName);
+      console.log('   lastName:', paymentData.orderDetail.lastName);
+      console.log('   orderId:', paymentData.orderDetail.orderId);
+      console.log('   amount:', paymentData.orderDetail.amount);
+      
+      const escapedDataString = correctedDataString.replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+      const html = `<!DOCTYPE html>
+<html>
+<head>
+    <title>Redirecting to Zaakpay...</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+</head>
+<body>
+    <div style="text-align: center; margin-top: 50px;">
+        <h2>Redirecting to Zaakpay Payment Gateway...</h2>
+        <p>Please wait while we redirect you to the secure payment page.</p>
+    </div>
+    <form id="zaakpayForm" method="POST" action="${TRANSACT_ENDPOINT}">
+        <input type="hidden" name="data" value="${escapedDataString}">
+        <input type="hidden" name="checksum" value="${checksum}">
+    </form>
+    <script>
+        document.getElementById('zaakpayForm').submit();
+    </script>
+</body>
+</html>`;
+      
+      return new NextResponse(html, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html',
+        },
+      });
+    }
+    
     const checksum = hmacSha256(dataString);
     
+    console.log('✅ [CHECKOUT] Payment data validated - all names are plain text');
+    console.log('📤 [CHECKOUT] Final data being sent to Zaakpay:');
+    console.log('   firstName:', paymentData.orderDetail.firstName, '(length:', paymentData.orderDetail.firstName.length + ')');
+    console.log('   lastName:', paymentData.orderDetail.lastName, '(length:', paymentData.orderDetail.lastName.length + ')');
+    console.log('   orderId:', paymentData.orderDetail.orderId);
+    console.log('   amount:', paymentData.orderDetail.amount);
+    console.log('   email:', paymentData.orderDetail.email);
+    console.log('   phone:', paymentData.orderDetail.phone);
     console.log('🔄 Preparing redirect to Zaakpay hosted checkout:', {
       endpoint: TRANSACT_ENDPOINT,
       mode: MODE,
