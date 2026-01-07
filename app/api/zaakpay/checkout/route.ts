@@ -352,19 +352,29 @@ export async function GET(request: NextRequest) {
       console.log('   orderId:', paymentData.orderDetail.orderId);
       console.log('   amount:', paymentData.orderDetail.amount);
       
-      // Use JavaScript to set form values to avoid HTML escaping issues
+      // Use JavaScript to set form values with verification
       const html = `<!DOCTYPE html>
 <html>
 <head>
     <title>Redirecting to Zaakpay...</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; }
+        .loading { text-align: center; margin: 30px 0; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
 </head>
 <body>
-    <div style="text-align: center; margin-top: 50px;">
-        <h2>Redirecting to Zaakpay Payment Gateway...</h2>
-        <p>Please wait while we redirect you to the secure payment page.</p>
+    <div class="container">
+        <div class="loading">
+            <div class="spinner"></div>
+            <h2>Preparing Payment...</h2>
+            <p id="status">Please wait...</p>
+        </div>
     </div>
-    <form id="zaakpayForm" method="POST" action="${TRANSACT_ENDPOINT}" enctype="application/x-www-form-urlencoded">
+    <form id="zaakpayForm" method="POST" action="${TRANSACT_ENDPOINT}" enctype="application/x-www-form-urlencoded" style="display:none;">
         <input type="hidden" name="data" id="dataField">
         <input type="hidden" name="checksum" id="checksumField">
     </form>
@@ -373,8 +383,12 @@ export async function GET(request: NextRequest) {
         const checksumField = document.getElementById('checksumField');
         dataField.value = ${JSON.stringify(correctedDataString)};
         checksumField.value = ${JSON.stringify(checksum)};
-        console.log('📤 Sending corrected data to Zaakpay');
-        document.getElementById('zaakpayForm').submit();
+        console.log('📤 Sending corrected data to Zaakpay (lastName corrected)');
+        const parsedData = JSON.parse(dataField.value);
+        console.log('✅ Verified - firstName:', parsedData.orderDetail.firstName);
+        console.log('✅ Verified - lastName:', parsedData.orderDetail.lastName);
+        document.getElementById('status').textContent = 'Redirecting to payment gateway...';
+        setTimeout(() => document.getElementById('zaakpayForm').submit(), 1000);
     </script>
 </body>
 </html>`;
@@ -415,39 +429,113 @@ export async function GET(request: NextRequest) {
     
     // Create an HTML form that auto-submits to Zaakpay (for POST data)
     // CRITICAL: Use JavaScript to set form values to avoid HTML escaping issues
-    // This ensures the JSON string is sent exactly as-is without corruption
+    // Add extensive verification before submission
     const html = `<!DOCTYPE html>
 <html>
 <head>
     <title>Redirecting to Zaakpay...</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .loading { text-align: center; margin: 30px 0; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .debug { background: #f8f9fa; padding: 15px; border-radius: 4px; margin-top: 20px; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto; }
+        .error { background: #fee; border: 1px solid #fcc; color: #c33; padding: 10px; border-radius: 4px; margin-top: 10px; }
+        .success { background: #efe; border: 1px solid #cfc; color: #3c3; padding: 10px; border-radius: 4px; margin-top: 10px; }
+    </style>
 </head>
 <body>
-    <div style="text-align: center; margin-top: 50px;">
-        <h2>Redirecting to Zaakpay Payment Gateway...</h2>
-        <p>Please wait while we redirect you to the secure payment page.</p>
+    <div class="container">
+        <div class="loading">
+            <div class="spinner"></div>
+            <h2>Preparing Payment...</h2>
+            <p>Please wait while we redirect you to the secure payment page.</p>
+        </div>
+        <div id="debug" class="debug" style="display:none;"></div>
+        <div id="status"></div>
     </div>
-    <form id="zaakpayForm" method="POST" action="${TRANSACT_ENDPOINT}" enctype="application/x-www-form-urlencoded">
+    <form id="zaakpayForm" method="POST" action="${TRANSACT_ENDPOINT}" enctype="application/x-www-form-urlencoded" style="display:none;">
         <input type="hidden" name="data" id="dataField">
         <input type="hidden" name="checksum" id="checksumField">
     </form>
     <script>
-        // Set form values using JavaScript to avoid HTML escaping issues
-        // This ensures the JSON is sent exactly as generated
-        const dataField = document.getElementById('dataField');
-        const checksumField = document.getElementById('checksumField');
-        dataField.value = ${JSON.stringify(dataString)};
-        checksumField.value = ${JSON.stringify(checksum)};
+        const debugLog = [];
+        function log(msg) {
+            console.log(msg);
+            debugLog.push(msg);
+            const debugDiv = document.getElementById('debug');
+            debugDiv.innerHTML = debugLog.join('<br>');
+            debugDiv.style.display = 'block';
+        }
         
-        // Log the values being sent (for debugging)
-        console.log('📤 Sending to Zaakpay:');
-        console.log('   Data length:', dataField.value.length);
-        console.log('   Checksum:', checksumField.value.substring(0, 20) + '...');
-        console.log('   First name in data:', dataField.value.match(/"firstName":"([^"]+)"/)?.[1]);
-        console.log('   Last name in data:', dataField.value.match(/"lastName":"([^"]+)"/)?.[1]);
-        
-        // Submit the form
-        document.getElementById('zaakpayForm').submit();
+        try {
+            log('🔧 Setting up payment form...');
+            
+            // Set form values using JavaScript
+            const dataField = document.getElementById('dataField');
+            const checksumField = document.getElementById('checksumField');
+            
+            const dataString = ${JSON.stringify(dataString)};
+            const checksumString = ${JSON.stringify(checksum)};
+            
+            dataField.value = dataString;
+            checksumField.value = checksumString;
+            
+            log('✅ Form values set');
+            log('📋 Data length: ' + dataField.value.length + ' chars');
+            log('📋 Checksum: ' + checksumField.value.substring(0, 30) + '...');
+            
+            // Parse and verify the data
+            try {
+                const parsedData = JSON.parse(dataField.value);
+                log('✅ Data is valid JSON');
+                log('📋 Order ID: ' + parsedData.orderDetail.orderId);
+                log('📋 Amount: ' + parsedData.orderDetail.amount);
+                log('📋 First Name: ' + parsedData.orderDetail.firstName + ' (length: ' + parsedData.orderDetail.firstName.length + ')');
+                log('📋 Last Name: ' + parsedData.orderDetail.lastName + ' (length: ' + parsedData.orderDetail.lastName.length + ')');
+                log('📋 Email: ' + parsedData.orderDetail.email);
+                log('📋 Phone: ' + parsedData.orderDetail.phone);
+                log('📋 Return URL: ' + parsedData.returnUrl);
+                
+                // Check if names look like base64
+                const firstName = parsedData.orderDetail.firstName;
+                const lastName = parsedData.orderDetail.lastName;
+                const base64Pattern = /^[A-Za-z0-9+\\/]{16,}={0,2}$/;
+                
+                if (base64Pattern.test(firstName) && firstName.length >= 20) {
+                    log('❌ ERROR: firstName looks like base64!');
+                    document.getElementById('status').innerHTML = '<div class="error">❌ Error: First name appears to be encrypted. Please contact support.</div>';
+                    throw new Error('First name is encrypted');
+                }
+                
+                if (lastName && base64Pattern.test(lastName) && lastName.length >= 20) {
+                    log('❌ ERROR: lastName looks like base64!');
+                    document.getElementById('status').innerHTML = '<div class="error">❌ Error: Last name appears to be encrypted. Please contact support.</div>';
+                    throw new Error('Last name is encrypted');
+                }
+                
+                log('✅ Names verified as plain text');
+                log('📤 Submitting form to: ${TRANSACT_ENDPOINT}');
+                document.getElementById('status').innerHTML = '<div class="success">✅ Payment data verified. Redirecting...</div>';
+                
+                // Submit after a short delay to allow logs to be visible
+                setTimeout(() => {
+                    document.getElementById('zaakpayForm').submit();
+                }, 1000);
+                
+            } catch (parseError) {
+                log('❌ ERROR parsing data: ' + parseError.message);
+                document.getElementById('status').innerHTML = '<div class="error">❌ Error: Invalid payment data. Please try again or contact support.</div>';
+                throw parseError;
+            }
+            
+        } catch (error) {
+            log('❌ CRITICAL ERROR: ' + error.message);
+            log('❌ Stack: ' + error.stack);
+            document.getElementById('status').innerHTML = '<div class="error">❌ Error: ' + error.message + '</div>';
+        }
     </script>
 </body>
 </html>`;
