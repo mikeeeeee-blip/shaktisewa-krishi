@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
-import crypto from 'crypto';
-import querystring from 'querystring';
+import { getChecksumString, calculateChecksum } from './checksum';
 
 const MODE = (process.env.ZACKPAY_MODE || '').toLowerCase() === 'production' ? 'production' : 'test';
 const MERCHANT_ID = MODE === 'production'
@@ -11,15 +10,17 @@ const SECRET_KEY = MODE === 'production'
   ? process.env.ZACKPAY_SECRET_KEY
   : process.env.ZACKPAY_SECRET_KEY_TEST || process.env.ZACKPAY_SECRET_KEY;
 
-// Zaakpay endpoint configuration
-// API Endpoint: https://api.zaakpay.com/transactU?v=8
-// Environment parameter should be passed in the request data (mode field)
-// Not in the URL - the URL is the same for both test and production
-const BASE_URL = 'https://api.zaakpay.com';
-const TRANSACT_ENDPOINT = `${BASE_URL}/transactU?v=8`;
+// Zaakpay endpoint configuration - Official Integration Pattern
+// Reference: zaakpay-nodejs-integration-main/routes/zaakpay/config.js
+// Staging: https://zaakstaging.zaakpay.com/api/paymentTransact/V8
+// Production: https://zaakpay.com/api/paymentTransact/V8
+const BASE_URL = MODE === 'production'
+  ? 'https://zaakpay.com'
+  : 'https://zaakstaging.zaakpay.com';
+const TRANSACT_ENDPOINT = `${BASE_URL}/api/paymentTransact/V8`;
 
 // Log endpoint configuration
-console.log('🔧 Zaakpay API Endpoint:', TRANSACT_ENDPOINT);
+console.log('🔧 Zaakpay API Endpoint (Official):', TRANSACT_ENDPOINT);
 console.log('   Mode:', MODE, '(passed in request data as mode: "0" for test, "1" for production)');
 
 // Log endpoint being used
@@ -72,25 +73,6 @@ function getServerBaseUrl(): string {
 }
 
 const SERVER_BASE_URL = getServerBaseUrl();
-
-function hmacSha256(dataString: string): string {
-  if (!SECRET_KEY) {
-    console.error('❌ CRITICAL: SECRET_KEY is empty when calculating checksum!');
-    throw new Error('ZACKPAY_SECRET_KEY is not configured. Please set ZACKPAY_SECRET_KEY_TEST or ZACKPAY_SECRET_KEY in environment variables.');
-  }
-  
-  const checksum = crypto.createHmac('sha256', SECRET_KEY).update(dataString, 'utf8').digest('hex');
-  
-  // Log checksum calculation for debugging
-  console.log('🔐 Checksum calculation:', {
-    secretKeyPreview: SECRET_KEY.substring(0, 10) + '...',
-    dataLength: dataString.length,
-    checksumPreview: checksum.substring(0, 20) + '...',
-    mode: MODE
-  });
-  
-  return checksum;
-}
 
 // Helper to check if string is base64
 function isBase64(str: string): boolean {
@@ -385,44 +367,45 @@ export async function GET(request: NextRequest) {
     console.log('   firstName:', firstName, '(length:', firstName.length + ')');
     console.log('   lastName:', lastName, '(length:', lastName.length + ')');
     
-    // Build payment data according to Zaakpay API requirements
-    // Reference: https://developer.zaakpay.com/docs
-    // Mode: '0' = test/staging, '1' = production
-    const paymentData = {
-      merchantIdentifier: MERCHANT_ID,
+    // Build payment data according to OFFICIAL Zaakpay integration pattern
+    // Reference: zaakpay-nodejs-integration-main/routes/zaakpay/posttozaakpay.js
+    // Use flat structure with official field names (not nested orderDetail)
+    const paymentData: Record<string, string> = {
+      merchantIdentifier: MERCHANT_ID!,
+      orderId: orderId, // Must be <= 20 characters
+      amount: amountPaisa, // Amount in paisa (string)
+      currency: 'INR',
+      buyerEmail: email, // Official field name
+      buyerFirstName: firstName.trim(), // Official field name
+      buyerLastName: lastName.trim() || '', // Official field name (can be empty)
+      buyerPhoneNumber: phone, // Official field name
+      productDescription: productDescription, // Max 100 characters
+      returnUrl: returnUrl,
+      mode: MODE === 'production' ? '1' : '0', // Environment: '0' = test, '1' = production
       showMobile: 'true',
-      mode: MODE === 'production' ? '1' : '0', // Environment passed in request data
-      returnUrl,
-      orderDetail: {
-        orderId: orderId, // Must be <= 20 characters
-        amount: amountPaisa, // Amount in paisa (string)
-        currency: 'INR',
-        productDescription: productDescription, // Max 100 characters
-        email: email, // Valid email format
-        phone: phone, // 10-15 digits
-        firstName: firstName.trim(), // Plain text, required
-        lastName: lastName.trim() || '' // Plain text, can be empty
-      },
-      paymentInstrument: option ? mapOptionToInstrument(option) : {
-        paymentMode: 'UPIAPP',
-        netbanking: { bankid: '' }
-      },
-      billingAddress: { 
-        city: 'NA' // Required field
-      },
-      shippingAddress: { 
-        city: 'NA' // Required field
-      }
+      // Optional: buyerAddress, buyerCity, buyerState, buyerCountry, buyerPincode
+      buyerAddress: '',
+      buyerCity: 'NA',
+      buyerState: 'NA',
+      buyerCountry: 'IN',
+      buyerPincode: '',
+      // Optional: zpPayOption to restrict payment method (e.g., "UPI", "CC", "DC", "NB")
+      // zpPayOption: option === 'upi' ? 'UPI' : undefined
     };
     
+    // Add zpPayOption if specified
+    if (option === 'upi' || option === 'upi-id') {
+      paymentData.zpPayOption = 'UPI';
+    }
+    
     // Final validation before sending
-    console.log('📋 [CHECKOUT] Final payment data validation:');
-    console.log('   orderId:', paymentData.orderDetail.orderId, '(length:', paymentData.orderDetail.orderId.length + ', max: 20)');
-    console.log('   amount:', paymentData.orderDetail.amount, '(paisa)');
-    console.log('   email:', paymentData.orderDetail.email, '(valid:', /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paymentData.orderDetail.email) + ')');
-    console.log('   phone:', paymentData.orderDetail.phone, '(length:', paymentData.orderDetail.phone.length + ', valid: 10-15)');
-    console.log('   firstName:', paymentData.orderDetail.firstName, '(length:', paymentData.orderDetail.firstName.length + ')');
-    console.log('   lastName:', paymentData.orderDetail.lastName, '(length:', paymentData.orderDetail.lastName.length + ')');
+    console.log('📋 [CHECKOUT] Final payment data validation (Official Format):');
+    console.log('   orderId:', paymentData.orderId, '(length:', paymentData.orderId.length + ', max: 20)');
+    console.log('   amount:', paymentData.amount, '(paisa)');
+    console.log('   buyerEmail:', paymentData.buyerEmail, '(valid:', /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paymentData.buyerEmail) + ')');
+    console.log('   buyerPhoneNumber:', paymentData.buyerPhoneNumber, '(length:', paymentData.buyerPhoneNumber.length + ', valid: 10-15)');
+    console.log('   buyerFirstName:', paymentData.buyerFirstName, '(length:', paymentData.buyerFirstName.length + ')');
+    console.log('   buyerLastName:', paymentData.buyerLastName, '(length:', paymentData.buyerLastName.length + ')');
     console.log('   merchantIdentifier:', MERCHANT_ID ? MERCHANT_ID.substring(0, 15) + '...' : 'NOT SET');
     console.log('   returnUrl:', returnUrl);
     
@@ -430,203 +413,56 @@ export async function GET(request: NextRequest) {
     if (!paymentData.merchantIdentifier) {
       throw new Error('merchantIdentifier is required');
     }
-    if (!paymentData.orderDetail.orderId || paymentData.orderDetail.orderId.length === 0) {
+    if (!paymentData.orderId || paymentData.orderId.length === 0) {
       throw new Error('orderId is required');
     }
-    if (!paymentData.orderDetail.amount || paymentData.orderDetail.amount === '0') {
+    if (!paymentData.amount || paymentData.amount === '0') {
       throw new Error('amount must be greater than 0');
     }
-    if (!paymentData.orderDetail.email) {
-      throw new Error('email is required');
+    if (!paymentData.buyerEmail) {
+      throw new Error('buyerEmail is required');
     }
-    if (!paymentData.orderDetail.phone) {
-      throw new Error('phone is required');
+    if (!paymentData.buyerPhoneNumber) {
+      throw new Error('buyerPhoneNumber is required');
     }
-    if (!paymentData.orderDetail.firstName || paymentData.orderDetail.firstName.length === 0) {
-      throw new Error('firstName is required');
+    if (!paymentData.buyerFirstName || paymentData.buyerFirstName.length === 0) {
+      throw new Error('buyerFirstName is required');
     }
+    
+    // ✅ OFFICIAL ZAAKPAY CHECKSUM CALCULATION
+    // Use the official checksum string format (NOT JSON.stringify)
+    if (!SECRET_KEY) {
+      throw new Error('ZACKPAY_SECRET_KEY is not configured');
+    }
+    
+    const checksumString = getChecksumString(paymentData);
+    const checksum = calculateChecksum(checksumString, SECRET_KEY);
+    
+    console.log('✅ [CHECKOUT] Official checksum calculated');
+    console.log('   Checksum string length:', checksumString.length);
+    console.log('   Checksum string preview:', checksumString.substring(0, 200) + '...');
+    console.log('   Checksum preview:', checksum.substring(0, 20) + '...');
 
-    // CRITICAL: Verify the payment data before stringifying
-    console.log('📤 [CHECKOUT] Payment data before stringify:');
-    console.log('   firstName:', paymentData.orderDetail.firstName, '(type:', typeof paymentData.orderDetail.firstName + ', length:', paymentData.orderDetail.firstName.length + ')');
-    console.log('   lastName:', paymentData.orderDetail.lastName, '(type:', typeof paymentData.orderDetail.lastName + ', length:', paymentData.orderDetail.lastName.length + ')');
-    console.log('   isBase64(firstName):', isBase64(paymentData.orderDetail.firstName));
-    console.log('   isBase64(lastName):', isBase64(paymentData.orderDetail.lastName));
-    
-    // For hosted checkout: Redirect directly to Zaakpay without custom page
-    // Build form data and redirect to Zaakpay's hosted checkout (Express Checkout)
-    // This avoids API timeout issues by using Zaakpay's hosted page
-    const dataString = JSON.stringify(paymentData);
-    
-    // CRITICAL: Double-check the JSON string doesn't contain encrypted values
-    const firstNameMatch = dataString.match(/"firstName":"([^"]+)"/);
-    const lastNameMatch = dataString.match(/"lastName":"([^"]+)"/);
-    const firstNameInJson = firstNameMatch ? firstNameMatch[1] : null;
-    const lastNameInJson = lastNameMatch ? lastNameMatch[1] : null;
-    
-    console.log('🔍 [CHECKOUT] Verifying JSON string:');
-    console.log('   firstName in JSON:', firstNameInJson);
-    console.log('   lastName in JSON:', lastNameInJson);
-    console.log('   firstName isBase64:', firstNameInJson ? isBase64(firstNameInJson) : 'N/A');
-    console.log('   lastName isBase64:', lastNameInJson ? isBase64(lastNameInJson) : 'N/A');
-    
-    if (firstNameInJson && (isBase64(firstNameInJson) || firstNameInJson.length > 50)) {
-      console.error('❌ [CHECKOUT] CRITICAL: firstName in JSON is encrypted or invalid!');
-      console.error('   Value:', firstNameInJson);
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Invalid customer name detected. Please create a new payment link with plain text customer name.',
-          code: 'ENCRYPTED_NAME_DETECTED'
-        },
-        { status: 400 }
-      );
-    }
-    
-    if (lastNameInJson && lastNameInJson.length > 0 && (isBase64(lastNameInJson) || lastNameInJson.length > 50)) {
-      console.warn('⚠️ [CHECKOUT] lastName in JSON looks encrypted, setting to empty');
-      paymentData.orderDetail.lastName = '';
-      
-      console.log('✅ [CHECKOUT] Corrected payment data - lastName set to empty');
-      console.log('📤 [CHECKOUT] Final data being sent to Zaakpay:');
-      console.log('   firstName:', paymentData.orderDetail.firstName);
-      console.log('   lastName:', paymentData.orderDetail.lastName);
-      console.log('   orderId:', paymentData.orderDetail.orderId);
-      console.log('   amount:', paymentData.orderDetail.amount);
-      
-      // ✅ STEP 1: Freeze final JSON ON SERVER (with corrected lastName)
-      const correctedDataString = JSON.stringify(paymentData);
-      const checksum = hmacSha256(correctedDataString);
-      
-      // ✅ STEP 2: Escape for HTML attribute
-      const escapedDataString = correctedDataString.replace(/'/g, "&apos;");
-      
-      // ✅ STEP 3: Inject directly - NO JavaScript manipulation
-      const html = `<!DOCTYPE html>
-<html>
-<head>
-    <title>Redirecting to Zaakpay...</title>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            background: #f5f5f5; 
-            padding: 20px; 
-            margin: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-        }
-        .container { 
-            text-align: center; 
-            background: white; 
-            padding: 40px; 
-            border-radius: 8px; 
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            max-width: 500px;
-        }
-        .spinner { 
-            border: 4px solid #f3f3f3; 
-            border-top: 4px solid #3498db; 
-            border-radius: 50%; 
-            width: 50px; 
-            height: 50px; 
-            animation: spin 1s linear infinite; 
-            margin: 0 auto 20px;
-        }
-        @keyframes spin { 
-            0% { transform: rotate(0deg); } 
-            100% { transform: rotate(360deg); } 
-        }
-        h2 { color: #333; margin: 0 0 10px 0; }
-        p { color: #666; margin: 0; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="spinner"></div>
-        <h2>Redirecting to Payment Gateway...</h2>
-        <p>Please wait while we redirect you to the secure payment page.</p>
-    </div>
-    <form method="POST" action="${TRANSACT_ENDPOINT}" enctype="application/x-www-form-urlencoded" style="display:none;">
-        <input type="hidden" name="data" value="${escapedDataString}" />
-        <input type="hidden" name="checksum" value="${checksum}" />
-    </form>
-    <script>
-        // ✅ Simple auto-submit - NO data manipulation
-        document.forms[0].submit();
-    </script>
-</body>
-</html>`;
-      
-      return new NextResponse(html, {
-        status: 200,
-        headers: {
-          'Content-Type': 'text/html',
-        },
-      });
-    }
-    
-    // CRITICAL: Verify we have the correct secret key before calculating checksum
-    const expectedTestSecretKey = '0678056d96914a8583fb518caf42828a';
-    const expectedProdSecretKey = '8213da8027db44aa937e203ce2745cfe';
-    
-    if (MODE === 'test') {
-      if (SECRET_KEY !== expectedTestSecretKey) {
-        console.error('❌ CRITICAL: Secret key mismatch in TEST mode!');
-        console.error('   Expected:', expectedTestSecretKey.substring(0, 20) + '...');
-        console.error('   Got:', SECRET_KEY ? SECRET_KEY.substring(0, 20) + '...' : 'NOT SET');
-        console.error('   This will cause checksum validation to fail!');
-        console.error('   Fix: Set ZACKPAY_SECRET_KEY_TEST=0678056d96914a8583fb518caf42828a in .env');
-      } else {
-        console.log('✅ Secret key verified for TEST mode');
-      }
-    } else {
-      if (SECRET_KEY !== expectedProdSecretKey) {
-        console.error('❌ CRITICAL: Secret key mismatch in PRODUCTION mode!');
-        console.error('   Expected:', expectedProdSecretKey.substring(0, 20) + '...');
-        console.error('   Got:', SECRET_KEY ? SECRET_KEY.substring(0, 20) + '...' : 'NOT SET');
-      } else {
-        console.log('✅ Secret key verified for PRODUCTION mode');
-      }
-    }
-    
-    // ✅ STEP 1: Freeze final JSON ON SERVER - DO NOT TOUCH AFTER THIS
-    const finalDataString = JSON.stringify(paymentData);
-    const checksum = hmacSha256(finalDataString);
-    
-    // Final verification log (server-side only)
-    console.log('✅ [CHECKOUT] Payment data validated - all names are plain text');
-    console.log('📤 [CHECKOUT] Final data being sent to Zaakpay:');
-    console.log('   firstName:', paymentData.orderDetail.firstName, '(length:', paymentData.orderDetail.firstName.length + ')');
-    console.log('   lastName:', paymentData.orderDetail.lastName, '(length:', paymentData.orderDetail.lastName.length + ')');
-    console.log('   orderId:', paymentData.orderDetail.orderId);
-    console.log('   amount:', paymentData.orderDetail.amount);
-    console.log('   email:', paymentData.orderDetail.email);
-    console.log('   phone:', paymentData.orderDetail.phone);
+    console.log('📤 [CHECKOUT] Final data being sent to Zaakpay (Official Format):');
+    console.log('   buyerFirstName:', paymentData.buyerFirstName, '(length:', paymentData.buyerFirstName.length + ')');
+    console.log('   buyerLastName:', paymentData.buyerLastName, '(length:', paymentData.buyerLastName.length + ')');
+    console.log('   orderId:', paymentData.orderId);
+    console.log('   amount:', paymentData.amount);
+    console.log('   buyerEmail:', paymentData.buyerEmail);
+    console.log('   buyerPhoneNumber:', paymentData.buyerPhoneNumber);
     console.log('   returnUrl:', returnUrl);
-    console.log('📋 [CHECKOUT] Complete JSON data string (first 500 chars):', finalDataString.substring(0, 500));
-    console.log('🔍 [CHECKOUT] Verifying dataString contains plain text names:');
-    const firstNameInDataString = finalDataString.match(/"firstName":"([^"]+)"/)?.[1];
-    const lastNameInDataString = finalDataString.match(/"lastName":"([^"]+)"/)?.[1];
-    console.log('   firstName in dataString:', firstNameInDataString, '(isBase64:', firstNameInDataString ? isBase64(firstNameInDataString) : 'N/A', ')');
-    console.log('   lastName in dataString:', lastNameInDataString, '(isBase64:', lastNameInDataString ? isBase64(lastNameInDataString) : 'N/A', ')');
-    console.log('🔄 Preparing redirect to Zaakpay hosted checkout:', {
+    console.log('🔄 Preparing redirect to Zaakpay (Official Endpoint):', {
       endpoint: TRANSACT_ENDPOINT,
       mode: MODE,
       transactionId: transactionId,
-      orderId: paymentData.orderDetail.orderId,
-      amount: paymentData.orderDetail.amount,
+      orderId: paymentData.orderId,
+      amount: paymentData.amount,
       returnUrl: returnUrl
     });
     
-    // ✅ STEP 2: Escape dataString for HTML attribute (only escape single quotes)
-    // ✅ STEP 3: Inject directly into HTML - NO JavaScript manipulation
-    const escapedDataString = finalDataString.replace(/'/g, "&apos;");
-    
-    // ✅ BULLETPROOF: Simple HTML form with direct injection, no JS parsing
+    // ✅ OFFICIAL ZAAKPAY FORM SUBMISSION
+    // Send individual form fields (not JSON in "data" field)
+    // Reference: zaakpay-nodejs-integration-main/client/src/file/zaakpay/ZaakPay.js
     const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -676,7 +512,11 @@ export async function GET(request: NextRequest) {
         <p>Please wait while we redirect you to the secure payment page.</p>
     </div>
     <form method="POST" action="${TRANSACT_ENDPOINT}" enctype="application/x-www-form-urlencoded" style="display:none;">
-        <input type="hidden" name="data" value="${escapedDataString}" />
+        ${Object.entries(paymentData)
+          .filter(([key, value]) => value !== undefined && value !== null && value !== '')
+          .map(([key, value]) => 
+            `<input type="hidden" name="${key}" value="${String(value).replace(/"/g, '&quot;').replace(/'/g, '&apos;')}" />`
+          ).join('\n        ')}
         <input type="hidden" name="checksum" value="${checksum}" />
     </form>
     <script>
