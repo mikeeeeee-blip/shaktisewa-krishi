@@ -175,91 +175,11 @@ export async function GET(request: NextRequest) {
     console.log('   firstName:', firstName, '(length:', firstName.length + ', isBase64:', isBase64(firstName) + ')');
     console.log('   lastName:', lastName, '(length:', lastName.length + ', isBase64:', isBase64(lastName) + ')');
 
-    // Build returnUrl - use Next.js API route for callback (not server)
-    // Must be on the same domain as Website URL in Zaakpay dashboard
-    // According to Zaakpay docs: returnUrl must be on the same domain as Website URL
-    // CRITICAL: NEVER use localhost - always use public URL
-    function getNextJsBaseUrl(): string {
-      // Priority order for base URL (all must be public URLs, NOT localhost)
-      const urlOptions = [
-        // Explicit callback URLs (highest priority)
-        process.env.ZACKPAY_CALLBACK_URL_PRODUCTION,
-        process.env.ZACKPAY_CALLBACK_URL_TEST,
-        process.env.ZACKPAY_CALLBACK_URL,
-        // Website URLs
-        process.env.ZACKPAY_WEBSITE_URL,
-        process.env.NEXT_PUBLIC_WEBSITE_URL,
-        // Public API URLs (but filter out server API URLs)
-        process.env.NEXT_PUBLIC_API_URL,
-        // Default production URL (never localhost)
-        'https://www.shaktisewafoudation.in'
-      ];
-      
-      // Find first valid public URL
-      for (const url of urlOptions) {
-        if (!url) continue;
-        
-        const trimmed = url.trim();
-        if (!trimmed) continue;
-        
-        // Skip localhost URLs
-        if (trimmed.includes('localhost') || trimmed.includes('127.0.0.1')) {
-          continue;
-        }
-        
-        // Normalize the URL - remove trailing slashes
-        let normalized = trimmed.replace(/\/+$/, '');
-        
-        // CRITICAL: Remove /api/v1 if present (this is for server API, not Next.js app)
-        if (normalized.endsWith('/api/v1')) {
-          normalized = normalized.replace(/\/api\/v1$/, '');
-        }
-        
-        // Skip server API URLs (api-krishi, vercel.app/api, etc.)
-        if (normalized.includes('api-krishi') || 
-            normalized.includes('vercel.app/api') ||
-            normalized.includes('/api/v1')) {
-          continue;
-        }
-        
-        // Must be HTTPS in production, or at least not localhost
-        if (normalized.startsWith('http://') && !normalized.includes('localhost')) {
-          // HTTP is OK for staging if it's a public URL
-          return normalized;
-        } else if (normalized.startsWith('https://')) {
-          return normalized;
-        }
-      }
-      
-      // Fallback: Always use production URL, never localhost
-      return 'https://www.shaktisewafoudation.in';
-    }
+    // Build returnUrl - ALWAYS use hardcoded production URL (never localhost)
+    // Hardcoded to always use: https://www.shaktisewafoudation.in/api/zaakpay/callback
+    const returnUrl = `https://www.shaktisewafoudation.in/api/zaakpay/callback?transaction_id=${transactionId}`;
     
-    const nextJsUrl = getNextJsBaseUrl();
-    let returnUrl = `${nextJsUrl}/api/zaakpay/callback?transaction_id=${transactionId}`;
-    
-    // Validate and fix returnUrl format if needed
-    if (returnUrl.includes('/api/v1/api/')) {
-      console.error('❌ ERROR: returnUrl contains duplicate /api/v1/api/ path!');
-      console.error('   This indicates incorrect URL normalization. Fixing...');
-      returnUrl = returnUrl.replace('/api/v1/api/', '/api/');
-      console.log('   Corrected returnUrl:', returnUrl);
-    }
-    
-    // CRITICAL: Final check - NEVER allow localhost
-    if ((returnUrl.includes('localhost') || returnUrl.includes('127.0.0.1'))) {
-      console.error('❌ CRITICAL ERROR: returnUrl still contains localhost after processing!');
-      console.error('   This should never happen. Using production URL as final fallback.');
-      returnUrl = `https://www.shaktisewafoudation.in/api/zaakpay/callback?transaction_id=${transactionId}`;
-      console.warn('⚠️ Using production URL as final fallback:', returnUrl);
-    }
-    
-    console.log('🔗 Return URL configured:', {
-      mode: MODE,
-      url: returnUrl,
-      baseUrl: nextJsUrl,
-      note: 'Must be on same domain as Website URL in Zaakpay dashboard'
-    });
+    console.log('🔗 Return URL configured (hardcoded):', returnUrl);
     
     const amountPaisa = Math.round(transaction.amount * 100).toString();
 
