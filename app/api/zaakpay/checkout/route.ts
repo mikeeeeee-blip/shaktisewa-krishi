@@ -387,10 +387,11 @@ export async function GET(request: NextRequest) {
     
     // Build payment data according to Zaakpay API requirements
     // Reference: https://developer.zaakpay.com/docs
+    // Mode: '0' = test/staging, '1' = production
     const paymentData = {
       merchantIdentifier: MERCHANT_ID,
       showMobile: 'true',
-      mode: '0', // 0 = standard mode
+      mode: MODE === 'production' ? '1' : '0', // Environment passed in request data
       returnUrl,
       orderDetail: {
         orderId: orderId, // Must be <= 20 characters
