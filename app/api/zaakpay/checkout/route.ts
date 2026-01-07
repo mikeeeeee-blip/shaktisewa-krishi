@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
-import { getChecksumString, calculateChecksum } from './checksum';
+import { getChecksumString, calculateChecksum } from '../checksum';
 
 const MODE = (process.env.ZACKPAY_MODE || '').toLowerCase() === 'production' ? 'production' : 'test';
 const MERCHANT_ID = MODE === 'production'
