@@ -285,19 +285,85 @@ export async function GET(request: NextRequest) {
       console.log('⏱️  Timeout settings:', { apiTimeout, connectionTimeout, mode: MODE });
       
       try {
-        // Test connection first (quick HEAD request)
-        try {
-          console.log('🔍 Testing connection to Zaakpay...');
-          const testResponse = await axios.head(BASE_URL, {
-            timeout: 3000,
-            validateStatus: () => true
-          });
-          console.log('✅ Connection test passed (status:', testResponse.status + ')');
-        } catch (testError: any) {
-          console.warn('⚠️ Connection test failed (will still try full request):', testError.code || testError.message);
-        }
+        // Log request details
+        console.log('🔍 Preparing to call Zaakpay API...');
 
-        // Retry logic for Zaakpay API (up to 2 retries)
+        // Use Node's native https module for better control and reliability
+        // This gives us more control over timeouts and connection handling
+        const url = new URL(TRANSACT_ENDPOINT);
+        const postData = formData;
+        
+        const makeRequest = (): Promise<any> => {
+          return new Promise((resolve, reject) => {
+            const options = {
+              hostname: url.hostname,
+              port: url.port || (url.protocol === 'https:' ? 443 : 80),
+              path: url.pathname + url.search,
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Length': Buffer.byteLength(postData),
+                'Accept': 'application/json',
+                'User-Agent': 'Zaakpay-Integration/1.0',
+                'Connection': 'close'
+              },
+              timeout: apiTimeout
+            };
+
+            console.log('📤 Making HTTPS request with native Node module:', {
+              hostname: options.hostname,
+              path: options.path,
+              dataLength: postData.length
+            });
+
+            const req = https.request(options, (res: any) => {
+              let responseData = '';
+              
+              res.on('data', (chunk: any) => {
+                responseData += chunk;
+              });
+              
+              res.on('end', () => {
+                try {
+                  const parsed = typeof responseData === 'string' && responseData.trim().startsWith('{')
+                    ? JSON.parse(responseData)
+                    : responseData;
+                  
+                  resolve({
+                    status: res.statusCode,
+                    statusText: res.statusMessage,
+                    headers: res.headers,
+                    data: parsed
+                  });
+                } catch (parseError) {
+                  resolve({
+                    status: res.statusCode,
+                    statusText: res.statusMessage,
+                    headers: res.headers,
+                    data: responseData
+                  });
+                }
+              });
+            });
+
+            req.on('error', (error: any) => {
+              console.error('❌ HTTPS request error:', error);
+              reject(error);
+            });
+
+            req.on('timeout', () => {
+              console.error('❌ Request timeout - aborting connection');
+              req.destroy();
+              reject(new Error('Request timeout'));
+            });
+
+            // Write data and end request
+            req.write(postData);
+            req.end();
+          });
+        };
+
+        // Retry logic (up to 2 retries)
         const maxRetries = 2;
         let lastError: any = null;
         let response: any = null;
@@ -306,50 +372,32 @@ export async function GET(request: NextRequest) {
           try {
             if (attempt > 0) {
               console.log(`🔄 Retry attempt ${attempt}/${maxRetries}...`);
-              // Wait before retry (exponential backoff: 1s, 2s)
               await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
             }
             
             const attemptStartTime = Date.now();
             console.log(`📤 Attempt ${attempt + 1}: Making POST request to Zaakpay...`);
             
-            response = await axios.post(TRANSACT_ENDPOINT, formData, {
-              headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Accept': 'application/json',
-                'User-Agent': 'Zaakpay-Integration/1.0',
-                'Connection': 'close' // Force close connection after request
-              },
-              timeout: apiTimeout,
-              maxRedirects: 0,
-              httpAgent: new http.Agent({
-                timeout: connectionTimeout,
-                keepAlive: false,
-                maxSockets: 1
-              }),
-              httpsAgent: new https.Agent({
-                timeout: connectionTimeout,
-                keepAlive: false,
-                rejectUnauthorized: true,
-                maxSockets: 1
-              })
-            });
+            response = await Promise.race([
+              makeRequest(),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout after ' + apiTimeout + 'ms')), apiTimeout)
+              )
+            ]);
             
             const attemptElapsed = Date.now() - attemptStartTime;
             console.log(`✅ Attempt ${attempt + 1} succeeded in ${attemptElapsed}ms`);
-            break; // Success, exit retry loop
+            break;
             
           } catch (attemptError: any) {
             lastError = attemptError;
-            const isTimeout = attemptError.code === 'ECONNABORTED' || 
-                            attemptError.message?.includes('timeout') ||
-                            attemptError.name === 'AbortError';
+            const isTimeout = attemptError.message?.includes('timeout') || 
+                            attemptError.message?.includes('Timeout');
             
             if (isTimeout && attempt < maxRetries) {
               console.warn(`⚠️ Attempt ${attempt + 1} timed out, will retry...`);
-              continue; // Retry
+              continue;
             } else {
-              // Non-timeout error or all retries exhausted
               throw attemptError;
             }
           }
@@ -361,16 +409,16 @@ export async function GET(request: NextRequest) {
 
         const elapsed = Date.now() - startTime;
         console.log(`✅ Zaakpay API responded in ${elapsed}ms`);
+        console.log(`📥 Response status: ${response.status}`);
 
-        let responseData: any;
-        if (typeof response.data === 'string') {
+        // Handle response data (native https module format)
+        let responseData: any = response.data;
+        if (typeof responseData === 'string') {
           try {
-            responseData = JSON.parse(response.data);
+            responseData = JSON.parse(responseData);
           } catch (e) {
-            responseData = response.data;
+            // Keep as string if not valid JSON
           }
-        } else {
-          responseData = response.data;
         }
 
         console.log('📥 Zaakpay Response:', {
@@ -494,18 +542,16 @@ export async function GET(request: NextRequest) {
           );
         }
 
-        if (error.response?.data) {
-          const responseData = error.response.data;
-          return NextResponse.json(
-            {
-              success: false,
-              error: responseData.responseDescription || error.message || 'Zaakpay API error',
-              responseCode: responseData.responseCode,
-              code: 'ZAAKPAY_ERROR'
-            },
-            { status: error.response.status || 500 }
-          );
-        }
+        // Handle any other errors
+        return NextResponse.json(
+          {
+            success: false,
+            error: error.message || 'Zaakpay API error',
+            code: 'ZAAKPAY_ERROR',
+            endpoint: TRANSACT_ENDPOINT
+          },
+          { status: 500 }
+        );
 
         throw error;
       }
