@@ -12,22 +12,15 @@ const SECRET_KEY = MODE === 'production'
   : process.env.ZACKPAY_SECRET_KEY_TEST || process.env.ZACKPAY_SECRET_KEY;
 
 // Zaakpay endpoint configuration
-// Note: If staging returns 404, Zaakpay may have changed their staging endpoint
-// Try production endpoint with test credentials if staging fails
-// Staging: https://zaakstaging.zaakpay.com/transactU?v=8 (may return 404)
-// Production: https://zaakpay.com/transactU?v=8
-// Alternative: https://zaakpay.com/transactU?v=8 (works with test credentials in test mode)
-
-// Use production endpoint for both test and production modes
-// Test credentials work on production endpoint when mode=0
-const BASE_URL = 'https://zaakpay.com';
+// API Endpoint: https://api.zaakpay.com/transactU?v=8
+// Environment parameter should be passed in the request data (mode field)
+// Not in the URL - the URL is the same for both test and production
+const BASE_URL = 'https://api.zaakpay.com';
 const TRANSACT_ENDPOINT = `${BASE_URL}/transactU?v=8`;
 
 // Log endpoint configuration
-if (MODE === 'test') {
-  console.log('⚠️ Using production endpoint with TEST credentials');
-  console.log('   This is normal - test credentials work on production endpoint');
-}
+console.log('🔧 Zaakpay API Endpoint:', TRANSACT_ENDPOINT);
+console.log('   Mode:', MODE, '(passed in request data as mode: "0" for test, "1" for production)');
 
 // Log endpoint being used
 console.log('🔧 Zaakpay Configuration:', {
