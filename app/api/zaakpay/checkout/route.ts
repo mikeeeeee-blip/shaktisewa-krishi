@@ -309,29 +309,138 @@ export async function GET(request: NextRequest) {
       return instrument;
     };
 
-    // Build payment data
+    // Validate and prepare order ID (must be <= 20 characters per Zaakpay)
+    // Zaakpay requirement: orderId must be alphanumeric and max 20 characters
+    let orderId = transaction.zaakpayOrderId || transaction.orderId;
+    if (!orderId || orderId.length === 0) {
+      throw new Error('Order ID is missing');
+    }
+    
+    // Remove any special characters and ensure alphanumeric only
+    orderId = orderId.replace(/[^a-zA-Z0-9]/g, '');
+    
+    if (orderId.length > 20) {
+      console.warn('⚠️ Order ID is longer than 20 characters, truncating:', orderId);
+      orderId = orderId.substring(0, 20);
+    }
+    
+    if (orderId.length === 0) {
+      // Fallback: generate a simple order ID
+      orderId = `ORD${Date.now()}`.substring(0, 20);
+      console.warn('⚠️ Generated fallback orderId:', orderId);
+    }
+    
+    console.log('📋 Order ID validated:', orderId, '(length:', orderId.length + ', max: 20)');
+    
+    // Validate email format
+    const email = String(transaction.customerEmail || '').trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error('Valid customer email is required');
+    }
+    
+    // Validate phone (must be 10 digits for India, or 10-15 digits)
+    let phone = String(transaction.customerPhone || '').trim();
+    // Remove any non-digit characters
+    phone = phone.replace(/\D/g, '');
+    if (phone.length < 10 || phone.length > 15) {
+      throw new Error('Phone number must be 10-15 digits');
+    }
+    
+    // Validate product description
+    const productDescription = (transaction.description || 'Product purchase').substring(0, 100);
+    if (!productDescription || productDescription.length === 0) {
+      throw new Error('Product description is required');
+    }
+    
+    // Ensure names are not empty and valid
+    // Sanitize names: Remove special characters that might cause validation issues
+    // Zaakpay may reject names with certain special characters
+    firstName = firstName.trim();
+    if (!firstName || firstName.length === 0) {
+      firstName = 'Customer';
+    }
+    // Remove any non-alphanumeric characters except spaces, hyphens, and apostrophes
+    firstName = firstName.replace(/[^a-zA-Z0-9\s\-']/g, '');
+    // Limit length to 50 characters (Zaakpay requirement)
+    if (firstName.length > 50) {
+      firstName = firstName.substring(0, 50);
+    }
+    if (firstName.length === 0) {
+      firstName = 'Customer';
+    }
+    
+    lastName = lastName.trim();
+    // Remove any non-alphanumeric characters except spaces, hyphens, and apostrophes
+    lastName = lastName.replace(/[^a-zA-Z0-9\s\-']/g, '');
+    // Limit length to 50 characters
+    if (lastName.length > 50) {
+      lastName = lastName.substring(0, 50);
+    }
+    // lastName can be empty
+    
+    console.log('🧹 [CHECKOUT] Sanitized names:');
+    console.log('   firstName:', firstName, '(length:', firstName.length + ')');
+    console.log('   lastName:', lastName, '(length:', lastName.length + ')');
+    
+    // Build payment data according to Zaakpay API requirements
+    // Reference: https://developer.zaakpay.com/docs
     const paymentData = {
       merchantIdentifier: MERCHANT_ID,
       showMobile: 'true',
-      mode: '0',
+      mode: '0', // 0 = standard mode
       returnUrl,
       orderDetail: {
-        orderId: transaction.zaakpayOrderId || transaction.orderId,
-        amount: amountPaisa,
+        orderId: orderId, // Must be <= 20 characters
+        amount: amountPaisa, // Amount in paisa (string)
         currency: 'INR',
-        productDescription: (transaction.description || 'Payment').substring(0, 100),
-        email: String(transaction.customerEmail || '').trim(),
-        phone: String(transaction.customerPhone || '').trim(),
-        firstName: firstName,
-        lastName: lastName
+        productDescription: productDescription, // Max 100 characters
+        email: email, // Valid email format
+        phone: phone, // 10-15 digits
+        firstName: firstName.trim(), // Plain text, required
+        lastName: lastName.trim() || '' // Plain text, can be empty
       },
       paymentInstrument: option ? mapOptionToInstrument(option) : {
         paymentMode: 'UPIAPP',
         netbanking: { bankid: '' }
       },
-      billingAddress: { city: 'NA' },
-      shippingAddress: { city: 'NA' }
+      billingAddress: { 
+        city: 'NA' // Required field
+      },
+      shippingAddress: { 
+        city: 'NA' // Required field
+      }
     };
+    
+    // Final validation before sending
+    console.log('📋 [CHECKOUT] Final payment data validation:');
+    console.log('   orderId:', paymentData.orderDetail.orderId, '(length:', paymentData.orderDetail.orderId.length + ', max: 20)');
+    console.log('   amount:', paymentData.orderDetail.amount, '(paisa)');
+    console.log('   email:', paymentData.orderDetail.email, '(valid:', /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paymentData.orderDetail.email) + ')');
+    console.log('   phone:', paymentData.orderDetail.phone, '(length:', paymentData.orderDetail.phone.length + ', valid: 10-15)');
+    console.log('   firstName:', paymentData.orderDetail.firstName, '(length:', paymentData.orderDetail.firstName.length + ')');
+    console.log('   lastName:', paymentData.orderDetail.lastName, '(length:', paymentData.orderDetail.lastName.length + ')');
+    console.log('   merchantIdentifier:', MERCHANT_ID ? MERCHANT_ID.substring(0, 15) + '...' : 'NOT SET');
+    console.log('   returnUrl:', returnUrl);
+    
+    // Validate all required fields are present
+    if (!paymentData.merchantIdentifier) {
+      throw new Error('merchantIdentifier is required');
+    }
+    if (!paymentData.orderDetail.orderId || paymentData.orderDetail.orderId.length === 0) {
+      throw new Error('orderId is required');
+    }
+    if (!paymentData.orderDetail.amount || paymentData.orderDetail.amount === '0') {
+      throw new Error('amount must be greater than 0');
+    }
+    if (!paymentData.orderDetail.email) {
+      throw new Error('email is required');
+    }
+    if (!paymentData.orderDetail.phone) {
+      throw new Error('phone is required');
+    }
+    if (!paymentData.orderDetail.firstName || paymentData.orderDetail.firstName.length === 0) {
+      throw new Error('firstName is required');
+    }
 
     // CRITICAL: Verify the payment data before stringifying
     console.log('📤 [CHECKOUT] Payment data before stringify:');
