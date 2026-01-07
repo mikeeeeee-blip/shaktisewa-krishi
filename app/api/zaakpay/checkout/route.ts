@@ -230,385 +230,60 @@ export async function GET(request: NextRequest) {
       shippingAddress: { city: 'NA' }
     };
 
-    // Call Zaakpay API directly from Next.js (not through server)
-    if (option && ['gpay', 'phonepe', 'paytm', 'upi', 'upi-id'].includes(option)) {
-      console.log('📤 Calling Zaakpay API directly from Next.js:', {
-        option: option,
-        transactionId: transactionId,
-        endpoint: TRANSACT_ENDPOINT
-      });
-
-      // Build payment data
-      const paymentInstrument = mapOptionToInstrument(option);
-      paymentData.paymentInstrument = paymentInstrument;
-
-      // Calculate checksum and call Zaakpay
-      const dataString = JSON.stringify(paymentData);
-      const checksum = hmacSha256(dataString);
-
-      console.log('📦 Payment data prepared:', {
-        orderId: paymentData.orderDetail.orderId,
-        amount: paymentData.orderDetail.amount,
-        paymentMode: paymentInstrument.paymentMode,
-        firstName: paymentData.orderDetail.firstName,
-        lastName: paymentData.orderDetail.lastName,
-        returnUrl: paymentData.returnUrl,
-        merchantId: MERCHANT_ID ? MERCHANT_ID.substring(0, 15) + '...' : 'NOT SET'
-      });
-
-      const formData = querystring.stringify({
-        data: dataString,
-        checksum: checksum
-      });
-
-      console.log('📤 Request details:', {
-        endpoint: TRANSACT_ENDPOINT,
-        mode: MODE,
-        dataLength: dataString.length,
-        formDataLength: formData.length,
-        checksum: checksum.substring(0, 20) + '...'
-      });
-
-      const http = require('http');
-      const https = require('https');
-      const startTime = Date.now();
-      
-        // Increase timeout - Zaakpay production API can be slow (connection test passes, so server is reachable)
-        // The POST request processing on Zaakpay's side takes time
-        const apiTimeout = MODE === 'production' ? 30000 : 35000; // 35s staging, 30s production  
-        const connectionTimeout = MODE === 'production' ? 10000 : 12000; // 12s staging, 10s production
-      
-      console.log('⏱️  Calling Zaakpay API at:', TRANSACT_ENDPOINT);
-      console.log('📋 Full request URL:', TRANSACT_ENDPOINT);
-      console.log('📋 Request method: POST');
-      console.log('📋 Content-Type: application/x-www-form-urlencoded');
-      console.log('⏱️  Timeout settings:', { apiTimeout, connectionTimeout, mode: MODE });
-      
-      try {
-        // Log request details
-        console.log('🔍 Preparing to call Zaakpay API...');
-
-        // Use Node's native https module for better control and reliability
-        // This gives us more control over timeouts and connection handling
-        const url = new URL(TRANSACT_ENDPOINT);
-        const postData = formData;
-        
-        const makeRequest = (): Promise<any> => {
-          return new Promise((resolve, reject) => {
-            const options = {
-              hostname: url.hostname,
-              port: url.port || (url.protocol === 'https:' ? 443 : 80),
-              path: url.pathname + url.search,
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Content-Length': Buffer.byteLength(postData),
-                'Accept': 'application/json',
-                'User-Agent': 'Zaakpay-Integration/1.0',
-                'Connection': 'close'
-              },
-              timeout: apiTimeout
-            };
-
-            console.log('📤 Making HTTPS request with native Node module:', {
-              hostname: options.hostname,
-              path: options.path,
-              dataLength: postData.length
-            });
-
-            const req = https.request(options, (res: any) => {
-              let responseData = '';
-              
-              res.on('data', (chunk: any) => {
-                responseData += chunk;
-              });
-              
-              res.on('end', () => {
-                try {
-                  const parsed = typeof responseData === 'string' && responseData.trim().startsWith('{')
-                    ? JSON.parse(responseData)
-                    : responseData;
-                  
-                  resolve({
-                    status: res.statusCode,
-                    statusText: res.statusMessage,
-                    headers: res.headers,
-                    data: parsed
-                  });
-                } catch (parseError) {
-                  resolve({
-                    status: res.statusCode,
-                    statusText: res.statusMessage,
-                    headers: res.headers,
-                    data: responseData
-                  });
-                }
-              });
-            });
-
-            req.on('error', (error: any) => {
-              console.error('❌ HTTPS request error:', error);
-              reject(error);
-            });
-
-            req.on('timeout', () => {
-              console.error('❌ Request timeout - aborting connection');
-              req.destroy();
-              reject(new Error('Request timeout'));
-            });
-
-            // Write data and end request
-            req.write(postData);
-            req.end();
-          });
-        };
-
-        // Retry logic (up to 2 retries)
-        const maxRetries = 2;
-        let lastError: any = null;
-        let response: any = null;
-        
-        for (let attempt = 0; attempt <= maxRetries; attempt++) {
-          try {
-            if (attempt > 0) {
-              console.log(`🔄 Retry attempt ${attempt}/${maxRetries}...`);
-              await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-            }
-            
-            const attemptStartTime = Date.now();
-            console.log(`📤 Attempt ${attempt + 1}: Making POST request to Zaakpay...`);
-            
-            response = await Promise.race([
-              makeRequest(),
-              new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout after ' + apiTimeout + 'ms')), apiTimeout)
-              )
-            ]);
-            
-            const attemptElapsed = Date.now() - attemptStartTime;
-            console.log(`✅ Attempt ${attempt + 1} succeeded in ${attemptElapsed}ms`);
-            break;
-            
-          } catch (attemptError: any) {
-            lastError = attemptError;
-            const isTimeout = attemptError.message?.includes('timeout') || 
-                            attemptError.message?.includes('Timeout');
-            
-            if (isTimeout && attempt < maxRetries) {
-              console.warn(`⚠️ Attempt ${attempt + 1} timed out, will retry...`);
-              continue;
-            } else {
-              throw attemptError;
-            }
-          }
-        }
-        
-        if (!response) {
-          throw lastError || new Error('All retry attempts failed');
-        }
-
-        const elapsed = Date.now() - startTime;
-        console.log(`✅ Zaakpay API responded in ${elapsed}ms`);
-        console.log(`📥 Response status: ${response.status}`);
-
-        // Handle response data (native https module format)
-        let responseData: any = response.data;
-        if (typeof responseData === 'string') {
-          try {
-            responseData = JSON.parse(responseData);
-          } catch (e) {
-            // Keep as string if not valid JSON
-          }
-        }
-
-        console.log('📥 Zaakpay Response:', {
-          status: response.status,
-          responseCode: responseData.responseCode,
-          hasIntentUrls: !!(responseData.bankPostData && responseData.bankPostData.androidIntentUrl)
-        });
-
-        // Handle validation errors
-        if (responseData.responseCode === '109') {
-          let errorMessage = responseData.responseDescription || 'Validation error';
-          if (returnUrl.includes('localhost') || returnUrl.includes('127.0.0.1')) {
-            errorMessage += '. returnUrl cannot be localhost - use a public URL (e.g., ngrok) and register it in Zaakpay dashboard.';
-          }
-          return NextResponse.json(
-            {
-              success: false,
-              error: errorMessage,
-              responseCode: responseData.responseCode,
-              orderDetail: responseData.orderDetail
-            },
-            { status: 400 }
-          );
-        }
-
-        // Handle UPI Intent response (responseCode 208)
-        if (responseData.responseCode === '208' && responseData.bankPostData) {
-          const intentUrls = {
-            android: responseData.bankPostData.androidIntentUrl || '',
-            gpay: responseData.bankPostData.gpayIntentIosUrl || responseData.bankPostData.androidIntentUrl || '',
-            phonepe: responseData.bankPostData.phonepeIntentIosUrl || responseData.bankPostData.androidIntentUrl || '',
-            paytm: responseData.bankPostData.paytmIntentIosUrl || responseData.bankPostData.androidIntentUrl || ''
-          };
-
-          return NextResponse.json({
-            success: true,
-            intentUrls: intentUrls,
-            responseCode: responseData.responseCode,
-            transaction: {
-              transactionId: transaction.transactionId,
-              amount: transaction.amount,
-              customerName: customerName
-            }
-          });
-        }
-
-        // Handle UPI Collect response
-        if (responseData.responseCode === '100' || responseData.responseCode === '208') {
-          return NextResponse.json({
-            success: true,
-            data: responseData,
-            responseCode: responseData.responseCode,
-            transaction: {
-              transactionId: transaction.transactionId,
-              amount: transaction.amount,
-              customerName: customerName
-            }
-          });
-        }
-
-        // Other response codes
-        return NextResponse.json(
-          {
-            success: false,
-            error: responseData.responseDescription || 'Payment initiation failed',
-            responseCode: responseData.responseCode,
-            data: responseData
-          },
-          { status: 400 }
-        );
-      } catch (error: any) {
-        console.error('❌ Zaakpay API error:', {
-          code: error.code,
-          message: error.message,
-          endpoint: TRANSACT_ENDPOINT,
-          mode: MODE
-        });
-        
-        if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-          const elapsed = Date.now() - startTime;
-          console.error('❌ Timeout after', elapsed, 'ms');
-          console.error('   Endpoint:', TRANSACT_ENDPOINT);
-          console.error('   Mode:', MODE);
-          console.error('   Error code:', error.code);
-          
-          const timeoutMessage = MODE === 'production' 
-            ? `Zaakpay production API (${TRANSACT_ENDPOINT}) is taking too long to respond (timed out after ${Math.round(elapsed/1000)}s). This might be a temporary issue with Zaakpay's servers. Please try again in a moment or contact Zaakpay support.`
-            : `Zaakpay staging API (${TRANSACT_ENDPOINT}) is slow or unresponsive (timed out after ${Math.round(elapsed/1000)}s). Please try again or contact Zaakpay support if this continues.`;
-          
-          return NextResponse.json(
-            {
-              success: false,
-              error: timeoutMessage,
-              code: 'TIMEOUT',
-              retry: true,
-              endpoint: TRANSACT_ENDPOINT,
-              elapsed: elapsed,
-              details: {
-                endpoint: TRANSACT_ENDPOINT,
-                mode: MODE,
-                timeout: apiTimeout,
-                errorCode: error.code
-              }
-            },
-            { status: 504 }
-          );
-        }
-        
-        // Network errors
-        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
-          console.error('❌ Network error:', error.code, error.message);
-          return NextResponse.json(
-            {
-              success: false,
-              error: `Network error: Could not connect to Zaakpay API (${error.code}). Please check your internet connection or contact support.`,
-              code: 'NETWORK_ERROR',
-              endpoint: TRANSACT_ENDPOINT,
-              errorCode: error.code
-            },
-            { status: 503 }
-          );
-        }
-
-        // Handle any other errors
-        return NextResponse.json(
-          {
-            success: false,
-            error: error.message || 'Zaakpay API error',
-            code: 'ZAAKPAY_ERROR',
-            endpoint: TRANSACT_ENDPOINT
-          },
-          { status: 500 }
-        );
-
-        throw error;
-      }
-    }
-
-    // No option selected - just return transaction data
-    // Intent URLs will be fetched on-demand when user selects an option
-    return NextResponse.json({
-      success: true,
-      transaction: {
-        transactionId: transaction.transactionId,
-        amount: transaction.amount,
-        customerName: customerName,
-        description: transaction.description,
-        merchantName: transaction.merchantName
+    // For hosted checkout: Redirect directly to Zaakpay without custom page
+    // Build form data and redirect to Zaakpay's hosted checkout (Express Checkout)
+    // This avoids API timeout issues by using Zaakpay's hosted page
+    const dataString = JSON.stringify(paymentData);
+    const checksum = hmacSha256(dataString);
+    
+    console.log('🔄 Preparing redirect to Zaakpay hosted checkout:', {
+      endpoint: TRANSACT_ENDPOINT,
+      mode: MODE,
+      transactionId: transactionId,
+      orderId: paymentData.orderDetail.orderId,
+      amount: paymentData.orderDetail.amount
+    });
+    
+    // Create an HTML form that auto-submits to Zaakpay (for POST data)
+    // Since NextResponse.redirect only does GET, we'll return HTML with auto-submit form
+    const escapedDataString = dataString.replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+    <title>Redirecting to Zaakpay...</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+</head>
+<body>
+    <div style="text-align: center; margin-top: 50px;">
+        <h2>Redirecting to Zaakpay Payment Gateway...</h2>
+        <p>Please wait while we redirect you to the secure payment page.</p>
+    </div>
+    <form id="zaakpayForm" method="POST" action="${TRANSACT_ENDPOINT}">
+        <input type="hidden" name="data" value="${escapedDataString}">
+        <input type="hidden" name="checksum" value="${checksum}">
+    </form>
+    <script>
+        document.getElementById('zaakpayForm').submit();
+    </script>
+</body>
+</html>`;
+    
+    return new NextResponse(html, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/html',
       },
-      intentUrls: null // Will be fetched on-demand
     });
 
   } catch (error: any) {
     console.error('❌ Zaakpay checkout API error:', error);
     
-    // Handle timeout specifically
-    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Request timeout: Zaakpay API took too long to respond. Please try again.',
-          code: 'TIMEOUT',
-          retry: true
-        },
-        { status: 504 }
-      );
-    }
-    
-    // Handle network errors
-    if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Network error: Could not connect to Zaakpay. Please check your internet connection.',
-          code: 'NETWORK_ERROR'
-        },
-        { status: 503 }
-      );
-    }
-    
-    // Handle other errors
     return NextResponse.json(
       {
         success: false,
-        error: error.response?.data?.responseDescription || error.message || 'Failed to process Zaakpay checkout',
-        code: error.response?.data?.responseCode || 'UNKNOWN_ERROR',
-        details: error.response?.data || error.message
+        error: error.message || 'Failed to process Zaakpay checkout',
+        code: 'CHECKOUT_ERROR'
       },
-      { status: error.response?.status || 500 }
+      { status: 500 }
     );
   }
-}
-
