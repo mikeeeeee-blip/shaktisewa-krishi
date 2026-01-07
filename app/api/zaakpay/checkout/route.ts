@@ -482,9 +482,6 @@ export async function GET(request: NextRequest) {
     if (lastNameInJson && lastNameInJson.length > 0 && (isBase64(lastNameInJson) || lastNameInJson.length > 50)) {
       console.warn('⚠️ [CHECKOUT] lastName in JSON looks encrypted, setting to empty');
       paymentData.orderDetail.lastName = '';
-      // Re-stringify with corrected lastName
-      const correctedDataString = JSON.stringify(paymentData);
-      const checksum = hmacSha256(correctedDataString);
       
       console.log('✅ [CHECKOUT] Corrected payment data - lastName set to empty');
       console.log('📤 [CHECKOUT] Final data being sent to Zaakpay:');
