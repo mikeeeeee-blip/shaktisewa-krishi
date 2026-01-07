@@ -18,8 +18,9 @@ const BASE_URL = 'https://api.zaakpay.com';
 const TRANSACT_ENDPOINT = `${BASE_URL}/api/paymentTransact/V8`;
 
 // Log endpoint configuration
-console.log('🔧 Zaakpay API Endpoint (Official):', TRANSACT_ENDPOINT);
+console.log('🔧 Zaakpay API Endpoint (Always Production):', TRANSACT_ENDPOINT);
 console.log('   Mode:', MODE, '(passed in request data as mode: "0" for test, "1" for production)');
+console.log('   Note: Test credentials work on production endpoint with mode="0"');
 
 // Log endpoint being used
 console.log('🔧 Zaakpay Configuration:', {
