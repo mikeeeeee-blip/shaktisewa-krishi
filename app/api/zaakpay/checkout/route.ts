@@ -206,14 +206,33 @@ export async function GET(request: NextRequest) {
       console.log('   Corrected returnUrl:', returnUrl);
     }
     
-    // Warn if using localhost
+    // CRITICAL: Zaakpay cannot accept localhost returnUrl - it will reject the transaction
+    // In test mode, we should still use a public URL (ngrok or staging URL)
     if ((returnUrl.includes('localhost') || returnUrl.includes('127.0.0.1'))) {
+      console.error('❌ ERROR: returnUrl contains localhost:', returnUrl);
+      console.error('   Zaakpay cannot reach localhost URLs and will reject the transaction.');
+      console.error('   Solutions:');
+      console.error('   1. Set ZACKPAY_CALLBACK_URL_TEST to a public URL (e.g., ngrok: https://xxx.ngrok.io)');
+      console.error('   2. Or use production URL even in test mode: Set ZACKPAY_CALLBACK_URL_PRODUCTION');
+      console.error('   3. Register the public URL in Zaakpay dashboard (Developers > Integration URLs)');
+      
+      // In test mode, try to use production URL as fallback
       if (MODE === 'test') {
-        console.warn('⚠️ WARNING: returnUrl contains localhost:', returnUrl);
-        console.warn('   Zaakpay cannot reach localhost. For testing, use ngrok or set ZACKPAY_CALLBACK_URL_TEST');
+        const fallbackUrl = process.env.ZACKPAY_CALLBACK_URL_PRODUCTION || 
+                           process.env.ZACKPAY_WEBSITE_URL ||
+                           'https://www.shaktisewafoudation.in';
+        returnUrl = `${fallbackUrl}/api/zaakpay/callback?transaction_id=${transactionId}`;
+        console.warn('⚠️ Using fallback production URL for returnUrl:', returnUrl);
+        console.warn('   Note: This may cause issues if the URL is not registered in Zaakpay dashboard');
       } else {
-        console.error('❌ ERROR: Production mode but returnUrl is localhost!');
-        console.error('   Set ZACKPAY_CALLBACK_URL_PRODUCTION to your production URL');
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'returnUrl cannot be localhost in production mode. Set ZACKPAY_CALLBACK_URL_PRODUCTION to your production URL.',
+            code: 'INVALID_RETURN_URL'
+          },
+          { status: 400 }
+        );
       }
     }
     
@@ -333,7 +352,7 @@ export async function GET(request: NextRequest) {
       console.log('   orderId:', paymentData.orderDetail.orderId);
       console.log('   amount:', paymentData.orderDetail.amount);
       
-      const escapedDataString = correctedDataString.replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+      // Use JavaScript to set form values to avoid HTML escaping issues
       const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -345,11 +364,16 @@ export async function GET(request: NextRequest) {
         <h2>Redirecting to Zaakpay Payment Gateway...</h2>
         <p>Please wait while we redirect you to the secure payment page.</p>
     </div>
-    <form id="zaakpayForm" method="POST" action="${TRANSACT_ENDPOINT}">
-        <input type="hidden" name="data" value="${escapedDataString}">
-        <input type="hidden" name="checksum" value="${checksum}">
+    <form id="zaakpayForm" method="POST" action="${TRANSACT_ENDPOINT}" enctype="application/x-www-form-urlencoded">
+        <input type="hidden" name="data" id="dataField">
+        <input type="hidden" name="checksum" id="checksumField">
     </form>
     <script>
+        const dataField = document.getElementById('dataField');
+        const checksumField = document.getElementById('checksumField');
+        dataField.value = ${JSON.stringify(correctedDataString)};
+        checksumField.value = ${JSON.stringify(checksum)};
+        console.log('📤 Sending corrected data to Zaakpay');
         document.getElementById('zaakpayForm').submit();
     </script>
 </body>
@@ -373,17 +397,25 @@ export async function GET(request: NextRequest) {
     console.log('   amount:', paymentData.orderDetail.amount);
     console.log('   email:', paymentData.orderDetail.email);
     console.log('   phone:', paymentData.orderDetail.phone);
+    console.log('   returnUrl:', returnUrl);
+    console.log('📋 [CHECKOUT] Complete JSON data string (first 500 chars):', dataString.substring(0, 500));
+    console.log('🔍 [CHECKOUT] Verifying dataString contains plain text names:');
+    const firstNameInDataString = dataString.match(/"firstName":"([^"]+)"/)?.[1];
+    const lastNameInDataString = dataString.match(/"lastName":"([^"]+)"/)?.[1];
+    console.log('   firstName in dataString:', firstNameInDataString, '(isBase64:', firstNameInDataString ? isBase64(firstNameInDataString) : 'N/A', ')');
+    console.log('   lastName in dataString:', lastNameInDataString, '(isBase64:', lastNameInDataString ? isBase64(lastNameInDataString) : 'N/A', ')');
     console.log('🔄 Preparing redirect to Zaakpay hosted checkout:', {
       endpoint: TRANSACT_ENDPOINT,
       mode: MODE,
       transactionId: transactionId,
       orderId: paymentData.orderDetail.orderId,
-      amount: paymentData.orderDetail.amount
+      amount: paymentData.orderDetail.amount,
+      returnUrl: returnUrl
     });
     
     // Create an HTML form that auto-submits to Zaakpay (for POST data)
-    // Since NextResponse.redirect only does GET, we'll return HTML with auto-submit form
-    const escapedDataString = dataString.replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+    // CRITICAL: Use JavaScript to set form values to avoid HTML escaping issues
+    // This ensures the JSON string is sent exactly as-is without corruption
     const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -395,11 +427,26 @@ export async function GET(request: NextRequest) {
         <h2>Redirecting to Zaakpay Payment Gateway...</h2>
         <p>Please wait while we redirect you to the secure payment page.</p>
     </div>
-    <form id="zaakpayForm" method="POST" action="${TRANSACT_ENDPOINT}">
-        <input type="hidden" name="data" value="${escapedDataString}">
-        <input type="hidden" name="checksum" value="${checksum}">
+    <form id="zaakpayForm" method="POST" action="${TRANSACT_ENDPOINT}" enctype="application/x-www-form-urlencoded">
+        <input type="hidden" name="data" id="dataField">
+        <input type="hidden" name="checksum" id="checksumField">
     </form>
     <script>
+        // Set form values using JavaScript to avoid HTML escaping issues
+        // This ensures the JSON is sent exactly as generated
+        const dataField = document.getElementById('dataField');
+        const checksumField = document.getElementById('checksumField');
+        dataField.value = ${JSON.stringify(dataString)};
+        checksumField.value = ${JSON.stringify(checksum)};
+        
+        // Log the values being sent (for debugging)
+        console.log('📤 Sending to Zaakpay:');
+        console.log('   Data length:', dataField.value.length);
+        console.log('   Checksum:', checksumField.value.substring(0, 20) + '...');
+        console.log('   First name in data:', dataField.value.match(/"firstName":"([^"]+)"/)?.[1]);
+        console.log('   Last name in data:', dataField.value.match(/"lastName":"([^"]+)"/)?.[1]);
+        
+        // Submit the form
         document.getElementById('zaakpayForm').submit();
     </script>
 </body>
