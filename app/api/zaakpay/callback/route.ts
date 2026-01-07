@@ -45,79 +45,62 @@ export async function POST(request: NextRequest) {
   return handleCallback(request);
 }
 
+// Get absolute URL for redirects
+function getAbsoluteUrl(path: string): string {
+  const baseUrl = process.env.NEXT_PUBLIC_WEBSITE_URL || 
+                  process.env.ZACKPAY_WEBSITE_URL || 
+                  'https://www.shaktisewafoudation.in';
+  return `${baseUrl.replace(/\/+$/, '')}${path.startsWith('/') ? path : '/' + path}`;
+}
+
 async function handleCallback(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const transactionId = searchParams.get('transaction_id') || searchParams.get('transactionId');
     
-    // Zaakpay sends callback data as query params or form data
-    const data = searchParams.get('data') || '';
-    const checksum = searchParams.get('checksum') || '';
+    // Zaakpay sends callback data as individual query parameters
+    // Extract all params and forward to server
+    const callbackParams: Record<string, any> = {};
+    searchParams.forEach((value, key) => {
+      callbackParams[key] = value;
+    });
     
-    // If no data in query, try to get from body (POST)
-    let callbackData = data;
-    let callbackChecksum = checksum;
-    
-    if (!callbackData || !callbackChecksum) {
+    // Also try to get from body if POST
+    if (request.method === 'POST') {
       try {
-        const body = await request.json().catch(() => ({}));
-        callbackData = body.data || callbackData;
-        callbackChecksum = body.checksum || callbackChecksum;
+        const body = await request.json().catch(() => null);
+        if (body) {
+          Object.assign(callbackParams, body);
+        }
       } catch (e) {
         // Try form data
         try {
           const formData = await request.formData();
-          callbackData = formData.get('data')?.toString() || callbackData;
-          callbackChecksum = formData.get('checksum')?.toString() || callbackChecksum;
+          formData.forEach((value, key) => {
+            callbackParams[key] = value.toString();
+          });
         } catch (e2) {
           // Ignore
         }
       }
     }
     
+    const transactionId = callbackParams.transaction_id || callbackParams.transactionId;
+    const orderId = callbackParams.orderId || callbackParams.orderid;
+    const responseCode = callbackParams.responseCode || callbackParams.responsecode;
+    
     console.log('📥 Zaakpay callback received:', {
       transactionId,
-      hasData: !!callbackData,
-      hasChecksum: !!callbackChecksum
+      orderId,
+      responseCode,
+      paramsCount: Object.keys(callbackParams).length
     });
     
-    if (!transactionId) {
-      console.error('❌ Transaction ID missing in callback');
-      return NextResponse.redirect('/payment-failed?error=transaction_id_missing');
-    }
-    
-    // Verify checksum if provided
-    if (callbackData && callbackChecksum) {
-      const isValid = verifyChecksum(callbackData, callbackChecksum);
-      if (!isValid) {
-        console.error('❌ Invalid checksum in Zaakpay callback');
-        // Still process, but log warning
-      } else {
-        console.log('✅ Checksum verified');
-      }
-    }
-    
-    // Parse callback data if provided
-    let responseData: any = {};
-    if (callbackData) {
-      try {
-        responseData = JSON.parse(callbackData);
-      } catch (e) {
-        console.warn('⚠️ Could not parse callback data as JSON');
-      }
-    }
-    
-    // Forward callback to server to update transaction
-    // Server will handle the transaction status update
+    // Forward ALL callback params to server to update transaction
+    // Server expects individual params, not nested data
     try {
       const serverResponse = await axios.post(
         `${SERVER_BASE_URL}/api/zaakpay/callback`,
-        {
-          transaction_id: transactionId,
-          data: callbackData,
-          checksum: callbackChecksum,
-          responseData: responseData
-        },
+        callbackParams, // Send all params directly
         {
           headers: {
             'Content-Type': 'application/json'
@@ -126,33 +109,43 @@ async function handleCallback(request: NextRequest) {
         }
       );
       
-      if (serverResponse.data?.success) {
-        const transaction = serverResponse.data.transaction;
-        const successUrl = transaction?.successUrl || transaction?.callbackUrl || '/payment-success';
-        const failureUrl = transaction?.failureUrl || '/payment-failed';
-        
-        // Redirect based on transaction status
-        if (transaction?.status === 'success' || transaction?.status === 'completed') {
+      // Server returns redirect, but we need to handle it ourselves
+      // Check if transaction was updated successfully
+      if (serverResponse.status === 200 || serverResponse.status === 302) {
+        // Transaction was processed, redirect based on response code
+        if (responseCode === '100' || responseCode === 100 || responseCode === '208') {
+          const successUrl = getAbsoluteUrl(`/payment-success?transaction_id=${transactionId || orderId || ''}`);
           return NextResponse.redirect(successUrl);
-        } else if (transaction?.status === 'failed') {
-          return NextResponse.redirect(`${failureUrl}?error=${encodeURIComponent(responseData.responseDescription || 'Payment failed')}`);
+        } else {
+          const errorMsg = callbackParams.responseDescription || callbackParams.response_description || 'Payment failed';
+          const failureUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent(errorMsg)}&transaction_id=${transactionId || orderId || ''}`);
+          return NextResponse.redirect(failureUrl);
         }
       }
     } catch (serverError: any) {
       console.error('❌ Error forwarding callback to server:', serverError.message);
-      // Still redirect, but to failure page
+      console.error('   Status:', serverError.response?.status);
+      console.error('   Data:', serverError.response?.data);
+      
+      // Still redirect based on response code if available
+      if (responseCode === '100' || responseCode === 100 || responseCode === '208') {
+        const successUrl = getAbsoluteUrl(`/payment-success?transaction_id=${transactionId || orderId || ''}`);
+        return NextResponse.redirect(successUrl);
+      } else {
+        const errorMsg = callbackParams.responseDescription || callbackParams.response_description || 'Payment processing error';
+        const failureUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent(errorMsg)}&transaction_id=${transactionId || orderId || ''}`);
+        return NextResponse.redirect(failureUrl);
+      }
     }
     
-    // Default redirect based on response code
-    if (responseData.responseCode === '100' || responseData.responseCode === '208') {
-      return NextResponse.redirect('/payment-success');
-    } else {
-      return NextResponse.redirect(`/payment-failed?error=${encodeURIComponent(responseData.responseDescription || 'Payment failed')}`);
-    }
+    // Default redirect if no response code
+    const failureUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent('Payment status unknown')}&transaction_id=${transactionId || orderId || ''}`);
+    return NextResponse.redirect(failureUrl);
     
   } catch (error: any) {
     console.error('❌ Zaakpay callback error:', error);
-    return NextResponse.redirect(`/payment-failed?error=${encodeURIComponent(error.message || 'Callback processing failed')}`);
+    const errorUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent(error.message || 'Callback processing failed')}`);
+    return NextResponse.redirect(errorUrl);
   }
 }
 
