@@ -23,8 +23,31 @@ const TRANSACT_ENDPOINT = `${BASE_URL}/transactU?v=8`;
 console.log('🔧 Zaakpay Configuration:', {
   mode: MODE,
   endpoint: TRANSACT_ENDPOINT,
-  merchantId: MERCHANT_ID ? MERCHANT_ID.substring(0, 15) + '...' : 'NOT SET'
+  merchantId: MERCHANT_ID ? MERCHANT_ID.substring(0, 15) + '...' : 'NOT SET',
+  secretKeySet: !!SECRET_KEY,
+  secretKeyPreview: SECRET_KEY ? SECRET_KEY.substring(0, 10) + '...' : 'NOT SET',
+  envCheck: {
+    ZACKPAY_MODE: process.env.ZACKPAY_MODE,
+    hasMerchantIdTest: !!process.env.ZACKPAY_MERCHANT_ID_TEST,
+    hasSecretKeyTest: !!process.env.ZACKPAY_SECRET_KEY_TEST,
+    hasMerchantIdProd: !!process.env.ZACKPAY_MERCHANT_ID,
+    hasSecretKeyProd: !!process.env.ZACKPAY_SECRET_KEY
+  }
 });
+
+// CRITICAL: Verify secret key is set
+if (!SECRET_KEY) {
+  console.error('❌ CRITICAL ERROR: ZACKPAY_SECRET_KEY is not set!');
+  console.error('   Mode:', MODE);
+  console.error('   Expected env var:', MODE === 'production' ? 'ZACKPAY_SECRET_KEY' : 'ZACKPAY_SECRET_KEY_TEST');
+  console.error('   Available env vars:', Object.keys(process.env).filter(k => k.includes('ZACKPAY')));
+}
+
+if (!MERCHANT_ID) {
+  console.error('❌ CRITICAL ERROR: ZACKPAY_MERCHANT_ID is not set!');
+  console.error('   Mode:', MODE);
+  console.error('   Expected env var:', MODE === 'production' ? 'ZACKPAY_MERCHANT_ID' : 'ZACKPAY_MERCHANT_ID_TEST');
+}
 
 // Get base API URL and normalize it
 // Remove /api/v1 suffix if present since zaakpay routes are at /api/zaakpay
@@ -48,7 +71,22 @@ function getServerBaseUrl(): string {
 const SERVER_BASE_URL = getServerBaseUrl();
 
 function hmacSha256(dataString: string): string {
-  return crypto.createHmac('sha256', SECRET_KEY || '').update(dataString, 'utf8').digest('hex');
+  if (!SECRET_KEY) {
+    console.error('❌ CRITICAL: SECRET_KEY is empty when calculating checksum!');
+    throw new Error('ZACKPAY_SECRET_KEY is not configured. Please set ZACKPAY_SECRET_KEY_TEST or ZACKPAY_SECRET_KEY in environment variables.');
+  }
+  
+  const checksum = crypto.createHmac('sha256', SECRET_KEY).update(dataString, 'utf8').digest('hex');
+  
+  // Log checksum calculation for debugging
+  console.log('🔐 Checksum calculation:', {
+    secretKeyPreview: SECRET_KEY.substring(0, 10) + '...',
+    dataLength: dataString.length,
+    checksumPreview: checksum.substring(0, 20) + '...',
+    mode: MODE
+  });
+  
+  return checksum;
 }
 
 // Helper to check if string is base64
@@ -399,6 +437,30 @@ export async function GET(request: NextRequest) {
           'Content-Type': 'text/html',
         },
       });
+    }
+    
+    // CRITICAL: Verify we have the correct secret key before calculating checksum
+    const expectedTestSecretKey = '0678056d96914a8583fb518caf42828a';
+    const expectedProdSecretKey = '8213da8027db44aa937e203ce2745cfe';
+    
+    if (MODE === 'test') {
+      if (SECRET_KEY !== expectedTestSecretKey) {
+        console.error('❌ CRITICAL: Secret key mismatch in TEST mode!');
+        console.error('   Expected:', expectedTestSecretKey.substring(0, 20) + '...');
+        console.error('   Got:', SECRET_KEY ? SECRET_KEY.substring(0, 20) + '...' : 'NOT SET');
+        console.error('   This will cause checksum validation to fail!');
+        console.error('   Fix: Set ZACKPAY_SECRET_KEY_TEST=0678056d96914a8583fb518caf42828a in .env');
+      } else {
+        console.log('✅ Secret key verified for TEST mode');
+      }
+    } else {
+      if (SECRET_KEY !== expectedProdSecretKey) {
+        console.error('❌ CRITICAL: Secret key mismatch in PRODUCTION mode!');
+        console.error('   Expected:', expectedProdSecretKey.substring(0, 20) + '...');
+        console.error('   Got:', SECRET_KEY ? SECRET_KEY.substring(0, 20) + '...' : 'NOT SET');
+      } else {
+        console.log('✅ Secret key verified for PRODUCTION mode');
+      }
     }
     
     const checksum = hmacSha256(dataString);
