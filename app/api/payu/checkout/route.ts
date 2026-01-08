@@ -15,10 +15,11 @@ const PAYU_SALT = PAYU_MODE === 'production'
     ? (process.env.PAYU_SALT || '')
     : (process.env.PAYU_SALT_TEST || process.env.PAYU_SALT || '');
 
-// PayU API URLs - Use sandbox for test mode
-const PAYU_BASE_URL = PAYU_MODE === 'test'
-    ? 'https://sandboxsecure.payu.in'
-    : 'https://secure.payu.in';
+// PayU API URLs
+// According to PayU docs: Test credentials work on production endpoint
+// Use production URL for both test and production modes
+// Test mode is determined by credentials, not by URL
+const PAYU_BASE_URL = 'https://secure.payu.in'; // Always use production URL
 
 const PAYU_PAYMENT_URL = `${PAYU_BASE_URL}/_payment`;
 
