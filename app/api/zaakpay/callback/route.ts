@@ -286,39 +286,61 @@ async function handleCallback(request: NextRequest) {
         console.log(`      Status: ${transaction.status}`);
         console.log(`      Response Code: ${transaction.responseCode}`);
         
+        // Check if transaction is already paid (prevent infinite loops)
+        const isAlreadyPaid = transaction.status === 'paid' || transaction.status === 'success' || transaction.status === 'completed';
+        
         // Redirect based on transaction status from server
-        if (transaction.status === 'paid' || transaction.status === 'success' || transaction.status === 'completed') {
-          // Return HTML that auto-closes the window instead of redirecting
-          // This ensures the window closes immediately after successful payment
-          const successUrl = getAbsoluteUrl(`/payment-success?transaction_id=${transaction.transactionId || transactionId || orderId}`);
-          console.log(`   🔀 Redirecting to SUCCESS (auto-close): ${successUrl}`);
+        if (isAlreadyPaid) {
+          // Return HTML that closes the window immediately - NO redirect to prevent loops
+          console.log(`   ✅ Payment successful - returning auto-close HTML (no redirect to prevent loops)`);
           console.log('========================================================================');
           
-          // Return HTML that closes the window immediately
+          // Return HTML that closes the window immediately without redirecting
           const autoCloseHtml = `<!DOCTYPE html>
 <html>
 <head>
     <title>Payment Successful</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script>
         (function() {
             // Try to close window immediately
-            if (window.opener && !window.opener.closed) {
-                window.close();
+            try {
+                if (window.opener && !window.opener.closed) {
+                    window.close();
+                    return;
+                }
+            } catch(e) {
+                // Ignore errors
             }
-            // Redirect to success page which will also try to close
-            window.location.href = '${successUrl}';
             
-            // Fallback: try to close after redirect
+            // If can't close, make page blank
+            document.body.style.display = 'none';
+            document.documentElement.style.display = 'none';
+            document.body.innerHTML = '';
+            
+            // Try to close again after a delay
             setTimeout(function() {
                 try {
                     window.close();
-                } catch(e) {}
-            }, 1000);
+                } catch(e) {
+                    // Ignore - window might not be closeable
+                }
+            }, 500);
+            
+            // Prevent any further redirects or loops
+            if (window.history && window.history.pushState) {
+                window.history.pushState(null, '', window.location.href);
+                window.onpopstate = function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return false;
+                };
+            }
         })();
     </script>
 </head>
-<body style="margin:0;padding:0;background:transparent;">
+<body style="margin:0;padding:0;background:transparent;display:none;">
 </body>
 </html>`;
           
