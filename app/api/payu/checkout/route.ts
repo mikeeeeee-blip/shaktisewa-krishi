@@ -401,10 +401,13 @@ export async function GET(request: NextRequest) {
     return new NextResponse(html, {
       status: 200,
       headers: {
-        'Content-Type': 'text/html',
+        'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
-        'Expires': '0'
+        'Expires': '0',
+        // Explicitly prevent Next.js from treating this as a Server Action
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'SAMEORIGIN'
       },
     });
 
