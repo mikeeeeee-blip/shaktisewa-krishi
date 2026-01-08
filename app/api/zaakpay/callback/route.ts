@@ -288,10 +288,46 @@ async function handleCallback(request: NextRequest) {
         
         // Redirect based on transaction status from server
         if (transaction.status === 'paid' || transaction.status === 'success' || transaction.status === 'completed') {
+          // Return HTML that auto-closes the window instead of redirecting
+          // This ensures the window closes immediately after successful payment
           const successUrl = getAbsoluteUrl(`/payment-success?transaction_id=${transaction.transactionId || transactionId || orderId}`);
-          console.log(`   🔀 Redirecting to SUCCESS: ${successUrl}`);
+          console.log(`   🔀 Redirecting to SUCCESS (auto-close): ${successUrl}`);
           console.log('========================================================================');
-          return NextResponse.redirect(successUrl);
+          
+          // Return HTML that closes the window immediately
+          const autoCloseHtml = `<!DOCTYPE html>
+<html>
+<head>
+    <title>Payment Successful</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <script>
+        (function() {
+            // Try to close window immediately
+            if (window.opener && !window.opener.closed) {
+                window.close();
+            }
+            // Redirect to success page which will also try to close
+            window.location.href = '${successUrl}';
+            
+            // Fallback: try to close after redirect
+            setTimeout(function() {
+                try {
+                    window.close();
+                } catch(e) {}
+            }, 1000);
+        })();
+    </script>
+</head>
+<body style="margin:0;padding:0;background:transparent;">
+</body>
+</html>`;
+          
+          return new NextResponse(autoCloseHtml, {
+            status: 200,
+            headers: {
+              'Content-Type': 'text/html',
+            },
+          });
         } else {
           const errorMsg = transaction.responseDescription || responseDescription || 'Payment failed';
           const failureUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent(errorMsg)}&transaction_id=${transaction.transactionId || transactionId || orderId}`);
