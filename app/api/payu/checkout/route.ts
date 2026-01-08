@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 import crypto from 'crypto';
 
+// Disable Server Actions for this route
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 // PayU Configuration - Support test mode similar to Zaakpay
 const PAYU_ENVIRONMENT = (process.env.PAYU_ENVIRONMENT || '').toLowerCase();
 const PAYU_MODE = (PAYU_ENVIRONMENT === 'test' || PAYU_ENVIRONMENT === 'sandbox') ? 'test' : 'production';
@@ -266,7 +270,9 @@ export async function GET(request: NextRequest) {
     <div class="loader"><div class="spinner"></div></div>
     <script>
         // Create and submit form dynamically to bypass Next.js Server Actions
+        // Use immediate execution and native form submission
         (function(){
+            'use strict';
             try {
                 var paymentUrl = ${JSON.stringify(paymentUrl)};
                 var formData = ${formDataJson};
@@ -283,6 +289,11 @@ export async function GET(request: NextRequest) {
                 form.method = 'POST';
                 form.action = paymentUrl;
                 form.enctype = 'application/x-www-form-urlencoded';
+                form.setAttribute('data-nextjs-no-js', 'true');
+                form.setAttribute('data-action', 'none');
+                // Prevent Next.js from detecting this as a Server Action
+                form.noValidate = true;
+                
                 if (formTarget) {
                     form.target = formTarget;
                 }
@@ -297,11 +308,41 @@ export async function GET(request: NextRequest) {
                     form.appendChild(input);
                 });
                 
-                // Append form to body and submit immediately
+                // Append form to body
                 document.body.appendChild(form);
                 
-                // Submit form - this will not be intercepted by Next.js
-                form.submit();
+                // Immediately submit form using native method
+                // This bypasses Next.js Server Actions because:
+                // 1. Form is created dynamically (not in initial HTML)
+                // 2. Form submits to external domain (secure.payu.in)
+                // 3. Submission happens before Next.js can intercept
+                // Use requestAnimationFrame to ensure DOM is ready but before Next.js processes
+                requestAnimationFrame(function() {
+                    try {
+                        // Direct native form submission - cannot be intercepted by Next.js
+                        // because it's submitting to an external domain
+                        form.submit();
+                    } catch(e) {
+                        console.error('Form submission error:', e);
+                        // Fallback: try alternative submission methods
+                        try {
+                            if (typeof form.requestSubmit === 'function') {
+                                form.requestSubmit();
+                            } else {
+                                // Create and trigger submit button
+                                var submitBtn = document.createElement('button');
+                                submitBtn.type = 'submit';
+                                submitBtn.style.display = 'none';
+                                form.appendChild(submitBtn);
+                                submitBtn.click();
+                            }
+                        } catch(e2) {
+                            console.error('All form submission methods failed:', e2);
+                            // Last resort: show error to user
+                            document.body.innerHTML = '<div style="padding: 20px; text-align: center; color: #d32f2f;"><h2>Payment Error</h2><p>Unable to submit payment form. Please try again.</p></div>';
+                        }
+                    }
+                });
                 
                 // Hide loader after submit
                 setTimeout(function() {
@@ -390,10 +431,15 @@ export async function GET(request: NextRequest) {
     return new NextResponse(html, {
       status: 200,
       headers: {
-        'Content-Type': 'text/html',
+        'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
-        'Expires': '0'
+        'Expires': '0',
+        'X-Content-Type-Options': 'nosniff',
+        // Disable Server Actions for this response
+        'X-Action-Required': 'none',
+        // Prevent Next.js from processing this as a Server Action
+        'X-Robots-Tag': 'noindex, nofollow'
       },
     });
 
