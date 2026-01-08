@@ -132,6 +132,43 @@ async function handleCallback(request: NextRequest) {
       
       if (redirectLocation) {
         console.log('   Backend redirect:', redirectLocation);
+        // If this is called from iframe, return HTML that redirects parent window
+        const isIframe = request.headers.get('referer')?.includes('payu-checkout-iframe') || 
+                        request.headers.get('sec-fetch-dest') === 'iframe';
+        
+        if (isIframe) {
+          // Return HTML that redirects parent window
+          const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <script>
+        // Redirect parent window to success/failure page
+        if (window.top !== window.self) {
+            window.top.location.href = "${redirectLocation}";
+        } else {
+            window.location.href = "${redirectLocation}";
+        }
+    </script>
+</head>
+<body>
+    <p>Processing payment callback...</p>
+    <script>
+        setTimeout(function() {
+            if (window.top !== window.self) {
+                window.top.location.href = "${redirectLocation}";
+            } else {
+                window.location.href = "${redirectLocation}";
+            }
+        }, 100);
+    </script>
+</body>
+</html>`;
+          return new NextResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' }
+          });
+        }
         return NextResponse.redirect(redirectLocation);
       }
       
@@ -148,14 +185,55 @@ async function handleCallback(request: NextRequest) {
         const transaction = transactionResponse.data.transaction;
         const status = transaction.status;
         
+        // Check if called from iframe
+        const isIframe = request.headers.get('referer')?.includes('payu-checkout-iframe') || 
+                        request.headers.get('sec-fetch-dest') === 'iframe';
+        
+        let redirectUrl = '';
         if (status === 'paid') {
-          const redirectUrl = transaction.successUrl || 
-                            transaction.callbackUrl || 
-                            getAbsoluteUrl(`/payment-success?transaction_id=${transactionId}`);
-          return NextResponse.redirect(redirectUrl);
+          redirectUrl = transaction.successUrl || 
+                      transaction.callbackUrl || 
+                      getAbsoluteUrl(`/payment-success?transaction_id=${transactionId}`);
         } else if (status === 'failed') {
-          const redirectUrl = transaction.failureUrl || 
-                            getAbsoluteUrl(`/payment-failed?transaction_id=${transactionId}`);
+          redirectUrl = transaction.failureUrl || 
+                      getAbsoluteUrl(`/payment-failed?transaction_id=${transactionId}`);
+        }
+        
+        if (redirectUrl && isIframe) {
+          // Return HTML that redirects parent window
+          const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <script>
+        // Redirect parent window
+        if (window.top !== window.self) {
+            window.top.location.href = "${redirectUrl}";
+        } else {
+            window.location.href = "${redirectUrl}";
+        }
+    </script>
+</head>
+<body>
+    <p>Processing payment callback...</p>
+    <script>
+        setTimeout(function() {
+            if (window.top !== window.self) {
+                window.top.location.href = "${redirectUrl}";
+            } else {
+                window.location.href = "${redirectUrl}";
+            }
+        }, 100);
+    </script>
+</body>
+</html>`;
+          return new NextResponse(html, {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' }
+          });
+        }
+        
+        if (redirectUrl) {
           return NextResponse.redirect(redirectUrl);
         }
       }
