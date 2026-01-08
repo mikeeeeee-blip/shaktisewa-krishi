@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
+import crypto from 'crypto';
 
 const PAYU_ENVIRONMENT = process.env.PAYU_ENVIRONMENT || 'production';
 const PAYU_BASE_URL = PAYU_ENVIRONMENT === 'sandbox'
@@ -7,6 +8,57 @@ const PAYU_BASE_URL = PAYU_ENVIRONMENT === 'sandbox'
     : 'https://secure.payu.in';
 
 const PAYU_PAYMENT_URL = `${PAYU_BASE_URL}/_payment`;
+const PAYU_KEY = process.env.PAYU_KEY || '';
+const PAYU_SALT = process.env.PAYU_SALT || '';
+
+// Generate PayU hash (same as backend)
+function generatePayUHash(params: {
+  txnid: string;
+  amount: string;
+  productinfo: string;
+  firstname: string;
+  email: string;
+}): string {
+  const key = String(PAYU_KEY || '').trim();
+  const txnid = String(params.txnid || '').trim();
+  const amount = String(params.amount || '').trim();
+  const productinfo = String(params.productinfo || '').trim();
+  const firstname = String(params.firstname || '').trim();
+  const email = String(params.email || '').trim();
+  const udf1 = '';
+  const udf2 = '';
+  const udf3 = '';
+  const udf4 = '';
+  const udf5 = '';
+  const udf6 = '';
+  const udf7 = '';
+  const udf8 = '';
+  const udf9 = '';
+  const udf10 = '';
+  const salt = String(PAYU_SALT || '').trim();
+
+  const hashString = [
+    key,
+    txnid,
+    amount,
+    productinfo,
+    firstname,
+    email,
+    udf1,
+    udf2,
+    udf3,
+    udf4,
+    udf5,
+    udf6,
+    udf7,
+    udf8,
+    udf9,
+    udf10,
+    salt
+  ].join('|');
+
+  return crypto.createHash('sha512').update(hashString, 'utf8').digest('hex');
+}
 
 // Get base API URL and normalize it
 function getServerBaseUrl(): string {
@@ -82,11 +134,58 @@ export async function GET(request: NextRequest) {
     let payuParams = transaction.payuParams;
 
     if (!payuParams) {
-      // If params not stored, generate them (shouldn't happen, but fallback)
-      return NextResponse.json(
-        { success: false, error: 'Payment parameters not found for this transaction' },
-        { status: 400 }
-      );
+      // Generate payment parameters if not stored (fallback - same as backend)
+      console.log('⚠️ PayU params not found, generating them...');
+      
+      if (!PAYU_KEY || !PAYU_SALT) {
+        return NextResponse.json(
+          { success: false, error: 'PayU credentials not configured' },
+          { status: 500 }
+        );
+      }
+
+      const amountFormatted = parseFloat(transaction.amount).toFixed(2);
+      const productInfo = transaction.description || `Payment for ${transaction.merchantName}`;
+      const firstName = (transaction.customerName || '').split(' ')[0] || transaction.customerName || 'Customer';
+      const email = (transaction.customerEmail || '').trim();
+      const phone = (transaction.customerPhone || '').trim();
+      
+      // Get callback URL from environment or use default
+      const backendUrl = SERVER_BASE_URL;
+      const payuCallbackUrl = `${backendUrl}/api/payu/callback?transaction_id=${transactionId}`;
+      const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || 
+                          process.env.FRONTEND_URL || 
+                          'https://payments.ninex-group.com';
+      
+      payuParams = {
+        key: PAYU_KEY.trim(),
+        txnid: transaction.payuOrderId || transaction.orderId,
+        amount: amountFormatted,
+        productinfo: productInfo,
+        firstname: firstName,
+        email: email,
+        phone: phone,
+        surl: (transaction.successUrl || transaction.callbackUrl || `${frontendUrl}/payment-success`).trim(),
+        furl: (transaction.failureUrl || `${frontendUrl}/payment-failed`).trim(),
+        curl: payuCallbackUrl.trim(),
+        service_provider: 'payu_paisa',
+        pg: 'UPI',
+        bankcode: 'UPI'
+      };
+      
+      // Generate hash
+      const hashParams = {
+        txnid: payuParams.txnid,
+        amount: payuParams.amount,
+        productinfo: payuParams.productinfo,
+        firstname: payuParams.firstname,
+        email: payuParams.email
+      };
+      
+      payuParams.hash = generatePayUHash(hashParams);
+      
+      // Note: Params are generated and will be used for this checkout
+      // If transaction is accessed again, params will be regenerated or saved by backend
     }
 
     // Ensure payment URL is set
