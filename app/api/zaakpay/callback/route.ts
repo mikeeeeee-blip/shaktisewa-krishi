@@ -234,25 +234,51 @@ async function handleCallback(request: NextRequest) {
     <title>Payment Successful</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body, html { width: 100%; height: 100%; background: transparent; overflow: hidden; display: none; }
+    </style>
     <script>
         (function() {
-            try {
-                if (window.opener && !window.opener.closed) {
+            function tryClose() {
+                try {
+                    if (window.opener) {
+                        window.close();
+                        return true;
+                    }
                     window.close();
-                    return;
+                    return true;
+                } catch(e) {
+                    return false;
                 }
-            } catch(e) {}
+            }
+            
+            // Hide immediately
             if (document.body) {
                 document.body.style.display = 'none';
                 document.body.innerHTML = '';
             }
-            setTimeout(function() {
-                try { window.close(); } catch(e) {}
-            }, 100);
+            
+            // Try closing immediately
+            if (!tryClose()) {
+                // Try multiple times
+                var attempts = 0;
+                var intervalId = setInterval(function() {
+                    attempts++;
+                    if (tryClose() || attempts >= 5) {
+                        clearInterval(intervalId);
+                    }
+                }, 200);
+                
+                setTimeout(function() {
+                    tryClose();
+                    clearInterval(intervalId);
+                }, 2000);
+            }
         })();
     </script>
 </head>
-<body style="display:none;margin:0;padding:0;"></body>
+<body></body>
 </html>`;
             
             return new NextResponse(alreadyPaidHtml, {
@@ -335,53 +361,91 @@ async function handleCallback(request: NextRequest) {
           console.log(`   ✅ Payment successful - returning auto-close HTML (no redirect to prevent loops)`);
           console.log('========================================================================');
           
-          // Return HTML that closes the window immediately without redirecting
+          // Return HTML that aggressively tries to close the window
           const autoCloseHtml = `<!DOCTYPE html>
 <html>
 <head>
     <title>Payment Successful</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body, html { width: 100%; height: 100%; background: transparent; overflow: hidden; }
+    </style>
     <script>
         (function() {
-            // Try to close window immediately
-            try {
-                if (window.opener && !window.opener.closed) {
-                    window.close();
-                    return;
-                }
-            } catch(e) {
-                // Ignore errors
-            }
-            
-            // If can't close, make page blank
-            document.body.style.display = 'none';
-            document.documentElement.style.display = 'none';
-            document.body.innerHTML = '';
-            
-            // Try to close again after a delay
-            setTimeout(function() {
+            // Immediate close attempts
+            function tryClose() {
                 try {
+                    // Method 1: If window has opener (popup), close it
+                    if (window.opener) {
+                        window.close();
+                        return true;
+                    }
+                    // Method 2: Try close anyway (works for popups opened by script)
                     window.close();
+                    return true;
                 } catch(e) {
-                    // Ignore - window might not be closeable
-                }
-            }, 500);
-            
-            // Prevent any further redirects or loops
-            if (window.history && window.history.pushState) {
-                window.history.pushState(null, '', window.location.href);
-                window.onpopstate = function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
                     return false;
-                };
+                }
             }
+            
+            // Method 3: Try to close parent if in iframe
+            try {
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({type: 'PAYMENT_SUCCESS_CLOSE'}, '*');
+                    if (window.parent.close) {
+                        window.parent.close();
+                    }
+                }
+            } catch(e) {}
+            
+            // Method 4: Try to go back in history (if opened by navigation)
+            try {
+                if (window.history.length > 1) {
+                    window.history.go(-1);
+                    setTimeout(function() {
+                        tryClose();
+                    }, 100);
+                }
+            } catch(e) {}
+            
+            // Immediate close attempts
+            if (!tryClose()) {
+                // Hide everything immediately
+                if (document.body) {
+                    document.body.style.display = 'none';
+                    document.body.innerHTML = '';
+                }
+                if (document.documentElement) {
+                    document.documentElement.style.display = 'none';
+                }
+                
+                // Try closing multiple times with delays
+                var attempts = 0;
+                var maxAttempts = 5;
+                var intervalId = setInterval(function() {
+                    attempts++;
+                    if (tryClose() || attempts >= maxAttempts) {
+                        clearInterval(intervalId);
+                    }
+                }, 200);
+                
+                // Final attempt after longer delay
+                setTimeout(function() {
+                    tryClose();
+                    clearInterval(intervalId);
+                }, 2000);
+            }
+            
+            // Prevent any navigation
+            window.onbeforeunload = function() { return false; };
+            window.onunload = function() {};
+            
         })();
     </script>
 </head>
-<body style="margin:0;padding:0;background:transparent;display:none;">
-</body>
+<body></body>
 </html>`;
           
           return new NextResponse(autoCloseHtml, {
