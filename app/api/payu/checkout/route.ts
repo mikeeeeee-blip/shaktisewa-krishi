@@ -209,11 +209,10 @@ export async function GET(request: NextRequest) {
       .join('');
 
     // ✅ OPTIMIZED PAYU FORM SUBMISSION - FAST LOADING
-    // Support iframe mode with top 10% hidden
+    // Support iframe mode with content shifted 10% up (no white box)
     const iframeStyle = iframe ? `
         body { margin: 0; padding: 0; background: #fff; overflow: hidden; }
-        .iframe-overlay { position: fixed; top: 0; left: 0; right: 0; height: 10vh; background: #fff; z-index: 999999; }
-        .iframe-container { position: fixed; top: 10vh; left: 0; right: 0; bottom: 0; overflow: hidden; }
+        .iframe-container { position: fixed; top: -10vh; left: 0; right: 0; bottom: -10vh; overflow: hidden; }
         .iframe-container iframe { width: 100%; height: 100%; border: none; }
         .loader { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #fff; z-index: 999998; }
     ` : `
@@ -222,7 +221,6 @@ export async function GET(request: NextRequest) {
     `;
     
     const iframeHTML = iframe ? `
-        <div class="iframe-overlay"></div>
         <div class="iframe-container">
             <iframe name="payuFrame" id="payuFrame" sandbox="allow-forms allow-scripts allow-same-origin allow-top-navigation allow-popups"></iframe>
         </div>
