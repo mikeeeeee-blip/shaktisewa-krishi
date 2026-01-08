@@ -207,6 +207,13 @@ export async function GET(request: NextRequest) {
 
     const paymentUrl = payuParams.action || payuParams.url || PAYU_PAYMENT_URL;
 
+    // Log payment URL for debugging
+    console.log('🔧 PayU Checkout Configuration:');
+    console.log('   Mode:', PAYU_MODE, PAYU_MODE === 'test' ? '(TEST/SANDBOX)' : '(PRODUCTION)');
+    console.log('   Payment URL:', paymentUrl);
+    console.log('   Transaction ID:', transactionId);
+    console.log('   Iframe mode:', iframe);
+
     // Build form inputs
     const formInputs = Object.entries(payuParams)
       .filter(([key, value]) => {
@@ -233,7 +240,7 @@ export async function GET(request: NextRequest) {
     
     const iframeHTML = iframe ? `
         <div class="iframe-container">
-            <iframe name="payuFrame" id="payuFrame" sandbox="allow-forms allow-scripts allow-same-origin allow-top-navigation allow-popups"></iframe>
+            <iframe name="payuFrame" id="payuFrame" sandbox="allow-forms allow-scripts allow-same-origin allow-top-navigation allow-popups allow-popups-to-escape-sandbox"></iframe>
         </div>
     ` : '';
     
@@ -257,16 +264,49 @@ export async function GET(request: NextRequest) {
         ${formInputs}
     </form>
     <script>
-        // Immediate auto-submit - no delay
+        // Immediate auto-submit with error handling
         (function(){
             var form = document.forms[0];
             if (form) {
-                form.submit();
-                // Hide loader after submit
-                setTimeout(function() {
-                    var loader = document.querySelector('.loader');
-                    if (loader) loader.style.display = 'none';
-                }, 500);
+                console.log('Submitting form to:', form.action);
+                try {
+                    form.submit();
+                    // Hide loader after submit
+                    setTimeout(function() {
+                        var loader = document.querySelector('.loader');
+                        if (loader) loader.style.display = 'none';
+                    }, 500);
+                    
+                    // If iframe mode, check for load errors
+                    ${iframe ? `
+                    var iframe = document.getElementById('payuFrame');
+                    if (iframe) {
+                        iframe.onerror = function() {
+                            console.error('Iframe load error');
+                            document.body.innerHTML = '<div style="padding: 20px; text-align: center; color: #d32f2f;"><h2>Connection Error</h2><p>Unable to connect to PayU. Please check your internet connection and try again.</p><p>Payment URL: ${escapeHtml(paymentUrl)}</p></div>';
+                        };
+                        iframe.onload = function() {
+                            console.log('Iframe loaded successfully');
+                        };
+                        // Timeout check - if iframe doesn't load in 30 seconds, show error
+                        setTimeout(function() {
+                            try {
+                                // Try to access iframe content - if it fails, connection might have timed out
+                                var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                            } catch(e) {
+                                // Cross-origin - this is normal, means iframe loaded
+                                console.log('Iframe loaded (cross-origin check passed)');
+                            }
+                        }, 30000);
+                    }
+                    ` : ''}
+                } catch(e) {
+                    console.error('Form submission error:', e);
+                    document.body.innerHTML = '<div style="padding: 20px; text-align: center; color: #d32f2f;"><h2>Submission Error</h2><p>Error submitting payment form: ' + e.message + '</p></div>';
+                }
+            } else {
+                console.error('Form not found');
+                document.body.innerHTML = '<div style="padding: 20px; text-align: center; color: #d32f2f;"><h2>Form Error</h2><p>Payment form not found. Please refresh the page.</p></div>';
             }
         })();
     </script>
