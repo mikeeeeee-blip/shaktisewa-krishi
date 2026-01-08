@@ -254,6 +254,23 @@ export async function GET(request: NextRequest) {
       .replace(/&/g, '\\u0026')
       .replace(/'/g, '\\u0027');
     
+    // Build form inputs HTML - same pattern as Zaakpay (proven to work)
+    const formInputsHtml = Object.entries(formDataObj)
+      .map(([key, value]) => {
+        const escapedValue = String(value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+        return `<input type="hidden" name="${key}" value="${escapedValue}" />`;
+      })
+      .join('');
+
+    const formTargetAttr = iframe ? 'target="payuFrame"' : '';
+    
+    // ✅ CRITICAL FIX: Use exact Zaakpay pattern - simple form in HTML with immediate submit
+    // This pattern works because form submits to external domain before Next.js can intercept
     const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -269,130 +286,76 @@ export async function GET(request: NextRequest) {
 <body>
     ${iframeHTML}
     <div class="loader"><div class="spinner"></div></div>
+    <form method="POST" action="${escapeHtml(paymentUrl)}" enctype="application/x-www-form-urlencoded" ${formTargetAttr} style="display:none;">
+        ${formInputsHtml}
+    </form>
     <script>
-        // Create and submit form dynamically to bypass Next.js Server Actions
-        // Use immediate execution with setTimeout(0) to ensure Next.js has finished processing
+        // Immediate auto-submit - same pattern as Zaakpay (proven to work)
+        // This pattern works because the form submits to external domain before Next.js can intercept
         (function(){
-            // Defer execution to next event loop to bypass Next.js Server Actions check
-            setTimeout(function() {
-                try {
-                    var paymentUrl = ${JSON.stringify(paymentUrl)};
-                    var formData = ${formDataJson};
-                    var formTarget = ${iframe ? '"payuFrame"' : 'null'};
-                    
-                    console.log('🔧 PayU Form Submission:');
-                    console.log('   Action URL:', paymentUrl);
-                    console.log('   Callback URL (curl):', formData.curl || '');
-                    console.log('   Success URL (surl):', formData.surl || '');
-                    console.log('   Failure URL (furl):', formData.furl || '');
-                    
-                    // Create form dynamically - this bypasses Next.js Server Actions
-                    // Form is created after page load, so Next.js can't intercept it
-                    var form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = paymentUrl;
-                    form.enctype = 'application/x-www-form-urlencoded';
-                    form.setAttribute('data-no-server-action', 'true'); // Explicitly mark as non-Server Action
-                    if (formTarget) {
-                        form.target = formTarget;
-                    }
-                    form.style.display = 'none';
-                    
-                    // Add all form fields
-                    Object.keys(formData).forEach(function(key) {
-                        var input = document.createElement('input');
-                        input.type = 'hidden';
-                        input.name = key;
-                        input.value = formData[key];
-                        form.appendChild(input);
-                    });
-                    
-                    // Append form to body
-                    document.body.appendChild(form);
-                    
-                    // Submit form immediately - Next.js won't intercept dynamically created forms
-                    form.submit();
+            var form = document.forms[0];
+            if (form) {
+                console.log('🔧 PayU Form Submission:');
+                console.log('   Action URL:', form.action);
+                console.log('   Form Target:', form.target || 'same window');
+                console.log('   Iframe Mode:', ${iframe});
                 
-                    // Hide loader after submit
-                    setTimeout(function() {
-                        var loader = document.querySelector('.loader');
-                        if (loader) loader.style.display = 'none';
-                    }, 500);
+                // Submit form immediately - form.target will handle iframe vs same window
+                form.submit();
+                console.log('✅ Form submitted, target:', form.target || 'same window');
+                
+                // Hide loader after submit (give it time to load)
+                setTimeout(function() {
+                    var loader = document.querySelector('.loader');
+                    if (loader) loader.style.display = 'none';
+                }, ${iframe ? '2000' : '1000'});
+                
+                ${iframe ? `
+                // Iframe mode: Monitor iframe for callbacks
+                var iframe = document.getElementById('payuFrame');
+                if (iframe) {
+                    // Monitor iframe for callbacks
+                    var checkInterval = setInterval(function() {
+                        try {
+                            var iframeUrl = iframe.contentWindow.location.href;
+                            if (iframeUrl && (iframeUrl.includes('/api/payu/callback') || iframeUrl.includes('/payment-success') || iframeUrl.includes('/payment-failed'))) {
+                                clearInterval(checkInterval);
+                                console.log('✅ Callback detected in iframe, redirecting parent:', iframeUrl);
+                                window.top.location.href = iframeUrl.includes('http') ? iframeUrl : window.location.origin + iframeUrl;
+                            }
+                        } catch(e) {
+                            // Cross-origin - normal when iframe is on PayU domain
+                            // This means PayU page has loaded in iframe
+                        }
+                    }, 2000);
                     
-                    // If iframe mode, handle callbacks and monitor iframe
-                    ${iframe ? `
-                    var iframe = document.getElementById('payuFrame');
-                    if (iframe) {
-                        var callbackReceived = false;
-                        var checkInterval = null;
-                        
-                        // Monitor iframe for callback redirects
-                        function checkIframeCallback() {
+                    // Also check iframe load event
+                    iframe.onload = function() {
+                        console.log('✅ Iframe loaded (may be cross-origin)');
+                        // Try to detect callback URL
+                        setTimeout(function() {
                             try {
                                 var iframeUrl = iframe.contentWindow.location.href;
-                                // Check if callback URL is in iframe
                                 if (iframeUrl && (iframeUrl.includes('/api/payu/callback') || iframeUrl.includes('/payment-success') || iframeUrl.includes('/payment-failed'))) {
-                                    console.log('Callback detected in iframe:', iframeUrl);
-                                    callbackReceived = true;
-                                    if (checkInterval) clearInterval(checkInterval);
-                                    
-                                    // Redirect parent window to callback URL
-                                    if (iframeUrl.includes('/payment-success') || iframeUrl.includes('status=success')) {
-                                        window.top.location.href = iframeUrl.includes('http') ? iframeUrl : window.location.origin + iframeUrl;
-                                    } else if (iframeUrl.includes('/payment-failed') || iframeUrl.includes('status=failure')) {
-                                        window.top.location.href = iframeUrl.includes('http') ? iframeUrl : window.location.origin + iframeUrl;
-                                    } else {
-                                        // It's the callback URL, let it process
-                                        window.top.location.href = iframeUrl.includes('http') ? iframeUrl : window.location.origin + iframeUrl;
-                                    }
+                                    clearInterval(checkInterval);
+                                    window.top.location.href = iframeUrl.includes('http') ? iframeUrl : window.location.origin + iframeUrl;
                                 }
                             } catch(e) {
-                                // Cross-origin - this is normal, means iframe is on PayU domain
-                                // PayU will redirect to our callback URL, which will then redirect parent
+                                // Cross-origin - PayU page loaded, this is expected
                             }
-                        }
-                        
-                        // Check for callback every 2 seconds
-                        checkInterval = setInterval(checkIframeCallback, 2000);
-                        
-                        // Also listen for postMessage from iframe (if PayU supports it)
-                        window.addEventListener('message', function(event) {
-                            if (event.data && (event.data.type === 'payu-callback' || event.data.status)) {
-                                console.log('PostMessage callback received:', event.data);
-                                callbackReceived = true;
-                                if (checkInterval) clearInterval(checkInterval);
-                                
-                                if (event.data.status === 'success' || event.data.status === 'paid') {
-                                    window.top.location.href = event.data.redirectUrl || '/payment-success?transaction_id=${escapeHtml(transactionId)}';
-                                } else {
-                                    window.top.location.href = event.data.redirectUrl || '/payment-failed?transaction_id=${escapeHtml(transactionId)}';
-                                }
-                            }
-                        });
-                        
-                        iframe.onerror = function() {
-                            console.error('Iframe load error');
-                            if (checkInterval) clearInterval(checkInterval);
-                            document.body.innerHTML = '<div style="padding: 20px; text-align: center; color: #d32f2f;"><h2>Connection Error</h2><p>Unable to connect to PayU. Please check your internet connection and try again.</p><p>Payment URL: ' + paymentUrl + '</p></div>';
-                        };
-                        
-                        iframe.onload = function() {
-                            console.log('Iframe loaded successfully');
-                            // Check for callback immediately after load
-                            setTimeout(checkIframeCallback, 1000);
-                        };
-                        
-                        // Cleanup after 5 minutes
-                        setTimeout(function() {
-                            if (checkInterval) clearInterval(checkInterval);
-                        }, 300000);
-                    }
-                    ` : ''}
-                } catch(e) {
-                    console.error('Form submission error:', e);
-                    document.body.innerHTML = '<div style="padding: 20px; text-align: center; color: #d32f2f;"><h2>Submission Error</h2><p>Error submitting payment form: ' + (e.message || 'Unknown error') + '</p></div>';
+                        }, 1000);
+                    };
+                    
+                    // Cleanup after 5 minutes
+                    setTimeout(function() {
+                        clearInterval(checkInterval);
+                    }, 300000);
                 }
-            }, 0); // Execute in next event loop to bypass Next.js Server Actions
+                ` : ''}
+            } else {
+                console.error('❌ Form not found');
+                document.body.innerHTML = '<div style="padding: 20px; text-align: center; color: #d32f2f;"><h2>Payment Error</h2><p>Payment form not found. Please try again.</p></div>';
+            }
         })();
     </script>
 </body>
