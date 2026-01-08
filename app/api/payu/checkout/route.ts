@@ -95,6 +95,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const transactionId = searchParams.get('transaction_id') || searchParams.get('transactionId');
+    const iframe = searchParams.get('iframe') === 'true' || searchParams.get('iframe') === '1';
 
     if (!transactionId) {
       return NextResponse.json(
@@ -150,12 +151,12 @@ export async function GET(request: NextRequest) {
       const email = (transaction.customerEmail || '').trim();
       const phone = (transaction.customerPhone || '').trim();
       
-      // Get callback URL from environment or use default
-      const backendUrl = SERVER_BASE_URL;
-      const payuCallbackUrl = `${backendUrl}/api/payu/callback?transaction_id=${transactionId}`;
-      const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || 
+      // Get callback URL - use Next.js callback route (same pattern as Zaakpay)
+      const frontendUrl = process.env.NEXT_PUBLIC_WEBSITE_URL || 
+                          process.env.NEXT_PUBLIC_FRONTEND_URL || 
                           process.env.FRONTEND_URL || 
-                          'https://payments.ninex-group.com';
+                          'https://www.shaktisewafoudation.in';
+      const payuCallbackUrl = `${frontendUrl.replace(/\/+$/, '')}/api/payu/callback?transaction_id=${transactionId}`;
       
       payuParams = {
         key: PAYU_KEY.trim(),
@@ -208,27 +209,57 @@ export async function GET(request: NextRequest) {
       .join('');
 
     // ✅ OPTIMIZED PAYU FORM SUBMISSION - FAST LOADING
-    // Minimal HTML - no loading UI, immediate form submission
+    // Support iframe mode with top 10% hidden
+    const iframeStyle = iframe ? `
+        body { margin: 0; padding: 0; background: #fff; overflow: hidden; }
+        .iframe-overlay { position: fixed; top: 0; left: 0; right: 0; height: 10vh; background: #fff; z-index: 999999; }
+        .iframe-container { position: fixed; top: 10vh; left: 0; right: 0; bottom: 0; overflow: hidden; }
+        .iframe-container iframe { width: 100%; height: 100%; border: none; }
+        .loader { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #fff; z-index: 999998; }
+    ` : `
+        body { margin: 0; padding: 0; background: #fff; }
+        .loader { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #fff; }
+    `;
+    
+    const iframeHTML = iframe ? `
+        <div class="iframe-overlay"></div>
+        <div class="iframe-container">
+            <iframe name="payuFrame" id="payuFrame" sandbox="allow-forms allow-scripts allow-same-origin allow-top-navigation"></iframe>
+        </div>
+    ` : '';
+    
+    const formTarget = iframe ? 'target="payuFrame"' : '';
+    
     const html = `<!DOCTYPE html>
 <html>
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { margin: 0; padding: 0; background: #fff; }
-        .loader { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #fff; }
+        ${iframeStyle}
         .spinner { width: 24px; height: 24px; border: 2px solid #e0e0e0; border-top-color: #3498db; border-radius: 50%; animation: spin 0.6s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
+    ${iframeHTML}
     <div class="loader"><div class="spinner"></div></div>
-    <form method="POST" action="${escapeHtml(paymentUrl)}" enctype="application/x-www-form-urlencoded" style="display:none;">
+    <form method="POST" action="${escapeHtml(paymentUrl)}" enctype="application/x-www-form-urlencoded" ${formTarget} style="display:none;">
         ${formInputs}
     </form>
     <script>
         // Immediate auto-submit - no delay
-        (function(){document.forms[0].submit();})();
+        (function(){
+            var form = document.forms[0];
+            if (form) {
+                form.submit();
+                // Hide loader after submit
+                setTimeout(function() {
+                    var loader = document.querySelector('.loader');
+                    if (loader) loader.style.display = 'none';
+                }, 500);
+            }
+        })();
     </script>
 </body>
 </html>`;
