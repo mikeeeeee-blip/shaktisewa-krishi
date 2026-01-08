@@ -224,7 +224,7 @@ export async function GET(request: NextRequest) {
     const iframeHTML = iframe ? `
         <div class="iframe-overlay"></div>
         <div class="iframe-container">
-            <iframe name="payuFrame" id="payuFrame" sandbox="allow-forms allow-scripts allow-same-origin allow-top-navigation"></iframe>
+            <iframe name="payuFrame" id="payuFrame" sandbox="allow-forms allow-scripts allow-same-origin allow-top-navigation allow-popups"></iframe>
         </div>
     ` : '';
     
