@@ -261,7 +261,7 @@ export async function GET(request: NextRequest) {
       )
       .join('');
     
-    const formTargetAttr = iframe ? `target="${iframe ? 'payuFrame' : ''}"` : '';
+    const formTargetAttr = iframe ? 'target="payuFrame"' : '';
     
     const html = `<!DOCTYPE html>
 <html>
@@ -290,20 +290,47 @@ export async function GET(request: NextRequest) {
                 if (form) {
                     console.log('🔧 PayU Form Submission:');
                     console.log('   Action URL:', form.action);
-                    // Submit immediately - bypasses Next.js Server Actions
-                    // Form submits to secure.payu.in (external domain) so Next.js cannot intercept
-                    form.submit();
-                    
-                    // Hide loader after submit
-                    setTimeout(function() {
-                        var loader = document.querySelector('.loader');
-                        if (loader) loader.style.display = 'none';
-                    }, 500);
+                    console.log('   Form Target:', form.target || 'same window');
+                    console.log('   Iframe Mode:', ${iframe});
                     
                     ${iframe ? `
-                    // Iframe mode: Monitor for callbacks
+                    // Iframe mode: Wait for iframe to be ready, then submit
                     var iframe = document.getElementById('payuFrame');
                     if (iframe) {
+                        // Wait for iframe to load before submitting
+                        iframe.onload = function() {
+                            console.log('✅ Iframe ready, submitting form...');
+                            form.submit();
+                            // Hide loader after form submits
+                            setTimeout(function() {
+                                var loader = document.querySelector('.loader');
+                                if (loader) loader.style.display = 'none';
+                            }, 1000);
+                        };
+                        
+                        // Also submit immediately if iframe is already loaded
+                        if (iframe.contentDocument || iframe.contentWindow) {
+                            console.log('✅ Iframe already ready, submitting form...');
+                            form.submit();
+                            setTimeout(function() {
+                                var loader = document.querySelector('.loader');
+                                if (loader) loader.style.display = 'none';
+                            }, 1000);
+                        }
+                        
+                        // Fallback: submit after short delay if iframe doesn't load
+                        setTimeout(function() {
+                            if (form && form.action) {
+                                console.log('⚠️ Fallback: Submitting form after delay...');
+                                form.submit();
+                                setTimeout(function() {
+                                    var loader = document.querySelector('.loader');
+                                    if (loader) loader.style.display = 'none';
+                                }, 1000);
+                            }
+                        }, 500);
+                        
+                        // Monitor iframe for callbacks
                         var checkInterval = setInterval(function() {
                             try {
                                 var iframeUrl = iframe.contentWindow.location.href;
@@ -320,13 +347,32 @@ export async function GET(request: NextRequest) {
                         setTimeout(function() {
                             clearInterval(checkInterval);
                         }, 300000);
+                    } else {
+                        console.error('❌ Iframe not found, submitting to same window');
+                        form.target = '';
+                        form.submit();
+                        setTimeout(function() {
+                            var loader = document.querySelector('.loader');
+                            if (loader) loader.style.display = 'none';
+                        }, 1000);
                     }
-                    ` : ''}
+                    ` : `
+                    // Normal mode: Submit immediately to same window
+                    form.submit();
+                    console.log('✅ Form submitted to same window');
+                    // Hide loader after submit
+                    setTimeout(function() {
+                        var loader = document.querySelector('.loader');
+                        if (loader) loader.style.display = 'none';
+                    }, 1000);
+                    `}
                 } else {
-                    console.error('Form not found');
+                    console.error('❌ Form not found');
+                    document.body.innerHTML = '<div style="padding: 20px; text-align: center; color: #d32f2f;"><h2>Payment Error</h2><p>Payment form not found. Please try again.</p></div>';
                 }
             } catch(e) {
-                console.error('Form submission error:', e);
+                console.error('❌ Form submission error:', e);
+                document.body.innerHTML = '<div style="padding: 20px; text-align: center; color: #d32f2f;"><h2>Payment Error</h2><p>Error: ' + (e.message || 'Unknown error') + '</p></div>';
             }
         })();
             } catch(e) {
