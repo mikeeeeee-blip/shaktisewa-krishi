@@ -168,14 +168,25 @@ export async function GET(request: NextRequest) {
       const email = (transaction.customerEmail || '').trim();
       const phone = (transaction.customerPhone || '').trim();
       
-      // Get callback URL - use Next.js callback route (same pattern as Zaakpay)
+      // ✅ CRITICAL: Callback URL must point to pure API route (no Server Actions)
+      // This is the webhook/callback endpoint that PayU will POST to
       const frontendUrl = process.env.NEXT_PUBLIC_WEBSITE_URL || 
                           process.env.NEXT_PUBLIC_FRONTEND_URL || 
                           process.env.FRONTEND_URL || 
                           'https://www.shaktisewafoudation.in';
-      const payuCallbackUrl = `${frontendUrl.replace(/\/+$/, '')}/api/payu/callback?transaction_id=${transactionId}`;
+      const payuCallbackUrl = `${frontendUrl.replace(/\/+$/, '')}/api/payu/callback`;
       
-      console.log('🔧 Generated PayU Callback URL:', payuCallbackUrl);
+      // Success and Failure URLs for user redirects (separate from callback)
+      const successUrl = transaction.successUrl || 
+                        transaction.callbackUrl || 
+                        `${frontendUrl}/payment/success?txnid=${transaction.payuOrderId || transaction.orderId}`;
+      const failureUrl = transaction.failureUrl || 
+                        `${frontendUrl}/payment/failed?txnid=${transaction.payuOrderId || transaction.orderId}`;
+      
+      console.log('🔧 PayU URLs:');
+      console.log('   Callback URL (curl - webhook):', payuCallbackUrl);
+      console.log('   Success URL (surl - user redirect):', successUrl);
+      console.log('   Failure URL (furl - user redirect):', failureUrl);
       
       payuParams = {
         key: PAYU_KEY.trim(),
@@ -185,9 +196,9 @@ export async function GET(request: NextRequest) {
         firstname: firstName,
         email: email,
         phone: phone,
-        surl: (transaction.successUrl || transaction.callbackUrl || `${frontendUrl}/payment-success`).trim(),
-        furl: (transaction.failureUrl || `${frontendUrl}/payment-failed`).trim(),
-        curl: payuCallbackUrl.trim(), // PayU callback URL - PayU will POST/GET to this URL after payment
+        surl: successUrl.trim(), // User redirect URL after successful payment
+        furl: failureUrl.trim(), // User redirect URL after failed payment
+        curl: payuCallbackUrl.trim(), // PayU callback/webhook URL - PayU POSTs here (server-to-server)
         service_provider: 'payu_paisa',
         pg: 'UPI',
         bankcode: 'UPI'

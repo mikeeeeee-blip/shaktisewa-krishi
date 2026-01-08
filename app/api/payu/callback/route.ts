@@ -1,5 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server';
-import axios from 'axios';
+import { NextRequest, NextResponse } from "next/server";
+import axios from "axios";
+
+// ✅ PURE API ROUTE - NO SERVER ACTIONS
+// This route accepts PayU callbacks and processes them server-side
+// User redirects are handled separately via /payment/success or /payment/failed pages
+
+// Disable Server Actions for this route
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
 
 // Get base API URL and normalize it
 function getServerBaseUrl(): string {
@@ -17,287 +26,187 @@ function getServerBaseUrl(): string {
 
 const SERVER_BASE_URL = getServerBaseUrl();
 
-// Get absolute URL for redirects
-function getAbsoluteUrl(path: string): string {
-  const baseUrl = process.env.NEXT_PUBLIC_WEBSITE_URL || 
-                  process.env.FRONTEND_URL || 
-                  'https://www.shaktisewafoudation.in';
-  return `${baseUrl.replace(/\/+$/, '')}${path.startsWith('/') ? path : '/' + path}`;
-}
-
-// Helper to escape HTML
-function escapeHtml(str: string): string {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-export async function GET(request: NextRequest) {
-  return handleCallback(request);
-}
-
-export async function POST(request: NextRequest) {
-  return handleCallback(request);
-}
-
-async function handleCallback(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
     console.log('========================================================================');
-    console.log('📥 [CALLBACK] PayU Callback Received (Next.js Route)');
+    console.log('📥 [CALLBACK] PayU Callback Received (Pure API Route)');
     console.log('========================================================================');
-    console.log(`   Method: ${request.method}`);
-    console.log(`   URL: ${request.url}`);
-    console.log(`   Headers:`, JSON.stringify(Object.fromEntries(request.headers.entries()), null, 2));
+    console.log('   Method: POST');
+    console.log('   URL:', req.url);
     
-    const { searchParams } = new URL(request.url);
+    // PayU sends x-www-form-urlencoded data
+    const formData = await req.formData();
     
-    // Extract transaction_id from URL
-    const transactionId = searchParams.get('transaction_id') || searchParams.get('transactionId') || '';
+    // Extract PayU callback parameters
+    const txnid = formData.get("txnid")?.toString() || '';
+    const status = formData.get("status")?.toString() || '';
+    const mihpayid = formData.get("mihpayid")?.toString() || '';
+    const hash = formData.get("hash")?.toString() || '';
+    const amount = formData.get("amount")?.toString() || '';
+    const productinfo = formData.get("productinfo")?.toString() || '';
+    const firstname = formData.get("firstname")?.toString() || '';
+    const email = formData.get("email")?.toString() || '';
+    const phone = formData.get("phone")?.toString() || '';
+    const error = formData.get("error")?.toString() || '';
+    const error_Message = formData.get("error_Message")?.toString() || '';
+    const pg_type = formData.get("pg_type")?.toString() || '';
+    const bank_ref_num = formData.get("bank_ref_num")?.toString() || '';
+    const payment_mode = formData.get("payment_mode")?.toString() || '';
     
-    console.log(`   Transaction ID (from URL): ${transactionId || 'MISSING'}`);
+    // Build callback params object
+    const callbackParams: Record<string, any> = {};
+    formData.forEach((value, key) => {
+      callbackParams[key] = value.toString();
+    });
     
-    // Extract all callback parameters from URL query params
+    console.log('   PayU Callback Parameters:');
+    console.log('   - txnid:', txnid);
+    console.log('   - status:', status);
+    console.log('   - mihpayid:', mihpayid);
+    console.log('   - hash:', hash ? hash.substring(0, 20) + '...' : 'NOT PROVIDED');
+    console.log('   - amount:', amount);
+    console.log('   - error:', error);
+    
+    // Try to find transaction by PayU order ID (txnid)
+    // First, forward to backend to process the callback
+    let transactionId = '';
+    
+    try {
+      // Backend will find transaction by txnid and process the callback
+      const backendCallbackUrl = `${SERVER_BASE_URL}/api/payu/callback`;
+      
+      console.log('   Forwarding to backend:', backendCallbackUrl);
+      
+      // Forward the callback to backend as form-encoded POST
+      const formDataString = new URLSearchParams(callbackParams as any).toString();
+      
+      const backendResponse = await axios.post(
+        backendCallbackUrl,
+        formDataString,
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          timeout: 15000,
+          maxRedirects: 0,
+          validateStatus: (status) => status >= 200 && status < 400
+        }
+      ).catch((error: any) => {
+        // Backend might return a redirect - that's okay, we just need to process the callback
+        if (error.response && error.response.status >= 300 && error.response.status < 400) {
+          const redirectUrl = error.response.headers.location;
+          console.log('   Backend returned redirect (expected):', redirectUrl);
+          // Extract transaction_id from redirect URL if possible
+          if (redirectUrl) {
+            const match = redirectUrl.match(/transaction[_-]?id[=:]([^&]+)/i);
+            if (match) {
+              transactionId = decodeURIComponent(match[1]);
+            }
+          }
+          return { data: { success: true, redirect: redirectUrl } };
+        }
+        throw error;
+      });
+      
+      // Backend processed the callback
+      console.log('   ✅ Backend processed callback successfully');
+      
+      // Try to get transaction_id from backend response or from txnid lookup
+      if (!transactionId && txnid) {
+        // Try to fetch transaction by PayU order ID
+        try {
+          const transactionResponse = await axios.get(
+            `${SERVER_BASE_URL}/api/payu/transaction/by-order/${encodeURIComponent(txnid)}`,
+            {
+              headers: { 'Content-Type': 'application/json' },
+              timeout: 5000
+            }
+          ).catch(() => null);
+          
+          if (transactionResponse?.data?.success) {
+            transactionId = transactionResponse.data.transaction?.transactionId || '';
+          }
+        } catch (e) {
+          // Ignore - transaction lookup failed
+        }
+      }
+      
+    } catch (error: any) {
+      console.error('   ❌ Error forwarding callback to backend:', error.message);
+      // Still return success to PayU to prevent retries
+    }
+    
+    // ✅ CRITICAL: Always return 200 OK to PayU
+    // PayU will retry if we return an error status
+    // The actual payment processing happens in the backend
+    return NextResponse.json({ 
+      success: true,
+      message: 'Callback received and processed',
+      txnid: txnid,
+      status: status
+    }, { status: 200 });
+    
+  } catch (err: any) {
+    console.error("❌ PayU callback error:", err);
+    // Still return 200 to prevent PayU retries
+    return NextResponse.json({ 
+      success: false,
+      error: err.message || 'Callback processing error'
+    }, { status: 200 });
+  }
+}
+
+// Also handle GET requests (PayU might send GET in some cases)
+export async function GET(req: NextRequest) {
+  try {
+    console.log('========================================================================');
+    console.log('📥 [CALLBACK] PayU Callback Received (GET)');
+    console.log('========================================================================');
+    
+    const { searchParams } = new URL(req.url);
+    
+    // Extract parameters from query string
     const callbackParams: Record<string, any> = {};
     searchParams.forEach((value, key) => {
       callbackParams[key] = value;
     });
     
-    // If POST, try to get body data (PayU typically sends form-encoded POST)
-    if (request.method === 'POST') {
-      try {
-        // Clone request to read body (can only read once)
-        const clonedRequest = request.clone();
-        const bodyText = await clonedRequest.text();
-        
-        console.log(`   POST Body (raw): ${bodyText.substring(0, 500)}${bodyText.length > 500 ? '...' : ''}`);
-        
-        if (bodyText) {
-          // PayU typically sends form-encoded data
-          try {
-            const params = new URLSearchParams(bodyText);
-            params.forEach((value, key) => {
-              callbackParams[key] = value;
-            });
-            console.log('   ✅ Parsed as URL-encoded form data');
-          } catch (e) {
-            // Try parsing as JSON
-            try {
-              const body = JSON.parse(bodyText);
-              if (body && typeof body === 'object') {
-                Object.assign(callbackParams, body);
-                console.log('   ✅ Parsed as JSON');
-              }
-            } catch (e2) {
-              // Try form data API
-              try {
-                const formData = await request.formData();
-                formData.forEach((value, key) => {
-                  callbackParams[key] = value.toString();
-                });
-                console.log('   ✅ Parsed as FormData');
-              } catch (e3) {
-                console.warn('⚠️ Could not parse POST body, using raw text');
-                callbackParams.raw_body = bodyText;
-              }
-            }
-          }
-        }
-      } catch (e: any) {
-        console.warn('⚠️ Error reading POST body:', e.message);
-      }
-    }
+    const txnid = callbackParams.txnid || '';
+    const status = callbackParams.status || '';
     
-    // Ensure transaction_id is in callback params
-    if (transactionId && !callbackParams.transaction_id) {
-      callbackParams.transaction_id = transactionId;
-    }
+    console.log('   PayU Callback Parameters (GET):');
+    console.log('   - txnid:', txnid);
+    console.log('   - status:', status);
     
-    console.log('   Callback Parameters (merged):', JSON.stringify(callbackParams, null, 2));
-    
-    if (!transactionId) {
-      console.error('❌ Missing transaction_id in callback');
-      const errorUrl = getAbsoluteUrl(`/payment-failed?error=missing_transaction_id`);
-      return NextResponse.redirect(errorUrl);
-    }
-    
-    // Forward callback to backend for processing
+    // Forward to backend
     try {
-      const backendCallbackUrl = `${SERVER_BASE_URL}/api/payu/callback?transaction_id=${encodeURIComponent(transactionId)}`;
+      const backendCallbackUrl = `${SERVER_BASE_URL}/api/payu/callback`;
       
-      console.log('   Forwarding to backend:', backendCallbackUrl);
-      console.log('   Forwarding method:', request.method);
-      
-      // Forward the callback to backend
-      // PayU sends POST with form-encoded data, so we need to send it properly
-      const backendResponse = await axios({
-        method: request.method,
-        url: backendCallbackUrl,
-        params: request.method === 'GET' ? callbackParams : undefined, // GET params in URL
-        data: request.method === 'POST' ? new URLSearchParams(callbackParams as any).toString() : undefined, // POST as form-encoded
-        headers: {
-          'Content-Type': request.method === 'POST' ? 'application/x-www-form-urlencoded' : 'application/json',
-          'User-Agent': request.headers.get('user-agent') || 'PayU-Callback-Forwarder',
-          'X-Forwarded-For': request.headers.get('x-forwarded-for') || '',
-          'X-Real-IP': request.headers.get('x-real-ip') || ''
-        },
+      await axios.get(backendCallbackUrl, {
+        params: callbackParams,
+        timeout: 15000,
         maxRedirects: 0,
-        validateStatus: (status) => status >= 200 && status < 400,
-        timeout: 15000 // Increased timeout for callback processing
-      }).catch((error: any) => {
-        // Backend will handle redirect, we just need to catch it
-        if (error.response && error.response.status >= 300 && error.response.status < 400) {
-          // This is a redirect, get the location
-          const redirectUrl = error.response.headers.location;
-          if (redirectUrl) {
-            console.log('   Backend returned redirect:', redirectUrl);
-            return { data: null, headers: { location: redirectUrl } };
-          }
-        }
-        console.error('   ❌ Backend callback error:', error.message);
-        if (error.response) {
-          console.error('   Backend response status:', error.response.status);
-          console.error('   Backend response data:', error.response.data);
-        }
-        throw error;
+        validateStatus: (status) => status >= 200 && status < 400
+      }).catch(() => {
+        // Ignore errors - backend processing happens asynchronously
       });
-      
-      // Check if backend returned a redirect
-      const redirectLocation = backendResponse.headers?.location || 
-                               (backendResponse as any).headers?.location;
-      
-      if (redirectLocation) {
-        console.log('   Backend redirect:', redirectLocation);
-        // If this is called from iframe, return HTML that redirects parent window
-        const isIframe = request.headers.get('referer')?.includes('payu-checkout-iframe') || 
-                        request.headers.get('sec-fetch-dest') === 'iframe';
-        
-        if (isIframe) {
-          // Return HTML that redirects parent window
-          const html = `<!DOCTYPE html>
-<html>
-<head>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <script>
-        // Redirect parent window to success/failure page
-        if (window.top !== window.self) {
-            window.top.location.href = "${redirectLocation}";
-        } else {
-            window.location.href = "${redirectLocation}";
-        }
-    </script>
-</head>
-<body>
-    <p>Processing payment callback...</p>
-    <script>
-        setTimeout(function() {
-            if (window.top !== window.self) {
-                window.top.location.href = "${redirectLocation}";
-            } else {
-                window.location.href = "${redirectLocation}";
-            }
-        }, 100);
-    </script>
-</body>
-</html>`;
-          return new NextResponse(html, {
-            status: 200,
-            headers: { 'Content-Type': 'text/html' }
-          });
-        }
-        return NextResponse.redirect(redirectLocation);
-      }
-      
-      // If backend processed successfully, fetch transaction to get redirect URL
-      const transactionResponse = await axios.get(
-        `${SERVER_BASE_URL}/api/payu/transaction/${transactionId}`,
-        {
-          headers: { 'Content-Type': 'application/json' },
-          timeout: 5000
-        }
-      );
-      
-      if (transactionResponse.data?.success) {
-        const transaction = transactionResponse.data.transaction;
-        const status = transaction.status;
-        
-        // Check if called from iframe
-        const isIframe = request.headers.get('referer')?.includes('payu-checkout-iframe') || 
-                        request.headers.get('sec-fetch-dest') === 'iframe';
-        
-        let redirectUrl = '';
-        if (status === 'paid') {
-          redirectUrl = transaction.successUrl || 
-                      transaction.callbackUrl || 
-                      getAbsoluteUrl(`/payment-success?transaction_id=${transactionId}`);
-        } else if (status === 'failed') {
-          redirectUrl = transaction.failureUrl || 
-                      getAbsoluteUrl(`/payment-failed?transaction_id=${transactionId}`);
-        }
-        
-        if (redirectUrl && isIframe) {
-          // Return HTML that redirects parent window
-          const html = `<!DOCTYPE html>
-<html>
-<head>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <script>
-        // Redirect parent window
-        if (window.top !== window.self) {
-            window.top.location.href = "${redirectUrl}";
-        } else {
-            window.location.href = "${redirectUrl}";
-        }
-    </script>
-</head>
-<body>
-    <p>Processing payment callback...</p>
-    <script>
-        setTimeout(function() {
-            if (window.top !== window.self) {
-                window.top.location.href = "${redirectUrl}";
-            } else {
-                window.location.href = "${redirectUrl}";
-            }
-        }, 100);
-    </script>
-</body>
-</html>`;
-          return new NextResponse(html, {
-            status: 200,
-            headers: { 'Content-Type': 'text/html' }
-          });
-        }
-        
-        if (redirectUrl) {
-          return NextResponse.redirect(redirectUrl);
-        }
-      }
-      
     } catch (error: any) {
-      console.error('❌ Error forwarding callback to backend:', error.message);
-      
-      // Fallback: redirect based on callback params
-      const status = callbackParams.status;
-      if (status === 'success' || callbackParams.pg_type === 'success') {
-        return NextResponse.redirect(getAbsoluteUrl(`/payment-success?transaction_id=${transactionId}`));
-      } else {
-        return NextResponse.redirect(getAbsoluteUrl(`/payment-failed?transaction_id=${transactionId}`));
-      }
+      console.error('   ❌ Error forwarding GET callback to backend:', error.message);
     }
     
-    // Default redirect
-    return NextResponse.redirect(getAbsoluteUrl(`/payment-failed?transaction_id=${transactionId}`));
+    // Return success
+    return NextResponse.json({ 
+      success: true,
+      message: 'Callback received',
+      txnid: txnid,
+      status: status
+    }, { status: 200 });
     
-  } catch (error: any) {
-    console.error('❌ PayU Callback Handler Error:', error);
-    const errorUrl = getAbsoluteUrl(`/payment-failed?error=callback_error`);
-    return NextResponse.redirect(errorUrl);
+  } catch (err: any) {
+    console.error("❌ PayU callback error (GET):", err);
+    return NextResponse.json({ 
+      success: false,
+      error: err.message || 'Callback processing error'
+    }, { status: 200 });
   }
 }
-
-
-
