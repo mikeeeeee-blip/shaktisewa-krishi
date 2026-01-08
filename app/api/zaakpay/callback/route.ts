@@ -222,6 +222,46 @@ async function handleCallback(request: NextRequest) {
             callbackParams.responsecode = '100';
             console.log('   ℹ️ Assuming responseCode=100 based on transaction status=paid');
           }
+          
+          // CRITICAL: If transaction is already paid, return auto-close HTML immediately to prevent infinite loops
+          if (transaction.status === 'paid' || transaction.status === 'success' || transaction.status === 'completed') {
+            console.log(`   ⚠️ Transaction already paid (status: ${transaction.status}) - returning auto-close HTML to prevent infinite loop`);
+            console.log('========================================================================');
+            
+            const alreadyPaidHtml = `<!DOCTYPE html>
+<html>
+<head>
+    <title>Payment Successful</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+        (function() {
+            try {
+                if (window.opener && !window.opener.closed) {
+                    window.close();
+                    return;
+                }
+            } catch(e) {}
+            if (document.body) {
+                document.body.style.display = 'none';
+                document.body.innerHTML = '';
+            }
+            setTimeout(function() {
+                try { window.close(); } catch(e) {}
+            }, 100);
+        })();
+    </script>
+</head>
+<body style="display:none;margin:0;padding:0;"></body>
+</html>`;
+            
+            return new NextResponse(alreadyPaidHtml, {
+              status: 200,
+              headers: {
+                'Content-Type': 'text/html',
+              },
+            });
+          }
         } else {
           console.warn('   ⚠️ Transaction not found in server database');
           console.warn(`      Response: ${JSON.stringify(transactionResponse.data)}`);
