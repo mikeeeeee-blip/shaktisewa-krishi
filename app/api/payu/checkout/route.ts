@@ -111,6 +111,12 @@ function escapeHtml(str: string): string {
 
 export async function GET(request: NextRequest) {
   try {
+    // CRITICAL: Remove any Server Actions headers from request
+    const headers = new Headers(request.headers);
+    headers.delete('x-action');
+    headers.delete('x-action-required');
+    headers.delete('next-action');
+    
     const { searchParams } = new URL(request.url);
     const transactionId = searchParams.get('transaction_id') || searchParams.get('transactionId');
     const iframe = searchParams.get('iframe') === 'true' || searchParams.get('iframe') === '1';
