@@ -89,45 +89,88 @@ async function handleCallback(request: NextRequest) {
     
     const { searchParams } = new URL(request.url);
     
+    // Extract transaction_id from URL first (this is always present)
+    const transactionId = searchParams.get('transaction_id') || searchParams.get('transactionId') || '';
+    
+    console.log('   🔗 URL Parameters:');
+    console.log(`      Transaction ID: ${transactionId || 'MISSING'}`);
+    console.log(`      Query params count: ${Array.from(searchParams.keys()).length}`);
+    
     // Extract all callback parameters from query string
     const callbackParams: Record<string, any> = {};
     searchParams.forEach((value, key) => {
       callbackParams[key] = value;
     });
     
-    // Also try to get from body if POST
+    // Try to get from body if POST (Zaakpay may send data in POST body)
     if (request.method === 'POST') {
+      console.log('   📨 POST request detected, trying to extract body data...');
+      
+      // Clone request to read body multiple times if needed
+      let bodyText: string | null = null;
+      
       try {
-        const body = await request.json().catch(() => null);
-        if (body && typeof body === 'object') {
-          console.log('   📦 Found JSON body, merging with query params');
-          Object.assign(callbackParams, body);
+        // Try to get raw body as text first
+        const clonedRequest = request.clone();
+        bodyText = await clonedRequest.text();
+        
+        if (bodyText && bodyText.length > 0) {
+          console.log(`   📦 Raw body received (${bodyText.length} bytes):`);
+          console.log(`      Preview: ${bodyText.substring(0, 200)}${bodyText.length > 200 ? '...' : ''}`);
+          
+          // Try parsing as URL-encoded form data (most common)
+          try {
+            const params = new URLSearchParams(bodyText);
+            console.log('   ✅ Parsed as URL-encoded form data:');
+            params.forEach((value, key) => {
+              callbackParams[key] = value;
+              console.log(`      ${key}: ${value.substring(0, 50)}${value.length > 50 ? '...' : ''}`);
+            });
+          } catch (e1) {
+            // Try parsing as JSON
+            try {
+              const body = JSON.parse(bodyText);
+              if (body && typeof body === 'object') {
+                console.log('   ✅ Parsed as JSON body:');
+                Object.entries(body).forEach(([key, value]) => {
+                  callbackParams[key] = value;
+                  console.log(`      ${key}: ${String(value).substring(0, 50)}${String(value).length > 50 ? '...' : ''}`);
+                });
+              }
+            } catch (e2) {
+              // Try parsing as form data
+              try {
+                const formData = await request.formData();
+                if (formData) {
+                  console.log('   ✅ Parsed as FormData:');
+                  formData.forEach((value, key) => {
+                    callbackParams[key] = value.toString();
+                    console.log(`      ${key}: ${value.toString().substring(0, 50)}${value.toString().length > 50 ? '...' : ''}`);
+                  });
+                }
+              } catch (e3) {
+                console.warn('   ⚠️ Could not parse POST body with any method');
+              }
+            }
+          }
+        } else {
+          console.log('   ⚠️ POST body is empty');
         }
       } catch (e) {
-        // Try form data
-        try {
-          const formData = await request.formData();
-          formData.forEach((value, key) => {
-            callbackParams[key] = value.toString();
-          });
-          console.log('   📦 Found form data, merging with query params');
-        } catch (e2) {
-          // Ignore
-        }
+        console.error('   ❌ Error reading POST body:', e);
       }
     }
     
     // Extract key parameters
-    const orderId = callbackParams.orderId || callbackParams.orderid || '';
-    const responseCode = callbackParams.responseCode || callbackParams.responsecode || '';
+    let orderId = callbackParams.orderId || callbackParams.orderid || callbackParams.order_id || '';
+    const responseCode = callbackParams.responseCode || callbackParams.responsecode || callbackParams.response_code || '';
     const responseDescription = callbackParams.responseDescription || callbackParams.response_description || '';
     const amount = callbackParams.amount || '';
     const checksum = callbackParams.checksum || '';
     const paymentMode = callbackParams.paymentMode || callbackParams.paymentMethod || '';
     const paymentId = callbackParams.paymentId || callbackParams.payment_id || callbackParams.pgTransId || '';
-    const transactionId = callbackParams.transaction_id || callbackParams.transactionId || '';
     
-    console.log('   📋 Callback Parameters:');
+    console.log('   📋 Callback Parameters Extracted:');
     console.log(`      Order ID: ${orderId || 'MISSING'}`);
     console.log(`      Transaction ID (from URL): ${transactionId || 'MISSING'}`);
     console.log(`      Response Code: ${responseCode || 'MISSING'}`);
@@ -139,11 +182,69 @@ async function handleCallback(request: NextRequest) {
     console.log(`      Total params: ${Object.keys(callbackParams).length}`);
     console.log('   📦 All callback params:', JSON.stringify(callbackParams, null, 2));
     
-    // Validate required fields
+    // If orderId is missing, try to fetch it from transaction using transaction_id
+    if (!orderId && transactionId) {
+      console.log('   🔍 Order ID missing, fetching from transaction in database...');
+      console.log(`      Looking up transaction: ${transactionId}`);
+      console.log(`      Server URL: ${SERVER_BASE_URL}/api/zaakpay/transaction/${transactionId}`);
+      
+      try {
+        const transactionResponse = await axios.get(
+          `${SERVER_BASE_URL}/api/zaakpay/transaction/${transactionId}`,
+          { 
+            timeout: 5000,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        console.log('   📥 Transaction lookup response:');
+        console.log(`      Status: ${transactionResponse.status}`);
+        console.log(`      Data: ${JSON.stringify(transactionResponse.data, null, 2)}`);
+        
+        if (transactionResponse.data?.success && transactionResponse.data?.transaction) {
+          const transaction = transactionResponse.data.transaction;
+          orderId = transaction.orderId || transaction.zaakpayOrderId || '';
+          console.log(`   ✅ Transaction found in database:`);
+          console.log(`      Order ID: ${orderId}`);
+          console.log(`      Zaakpay Order ID: ${transaction.zaakpayOrderId || 'N/A'}`);
+          console.log(`      Status: ${transaction.status}`);
+          console.log(`      Amount: ${transaction.amount}`);
+          
+          // Add orderId to callback params for server
+          callbackParams.orderId = orderId;
+          callbackParams.orderid = orderId;
+          
+          // If responseCode is missing, check if transaction has status info
+          if (!responseCode && transaction.status === 'paid') {
+            callbackParams.responseCode = '100';
+            callbackParams.responsecode = '100';
+            console.log('   ℹ️ Assuming responseCode=100 based on transaction status=paid');
+          }
+        } else {
+          console.warn('   ⚠️ Transaction not found in server database');
+          console.warn(`      Response: ${JSON.stringify(transactionResponse.data)}`);
+        }
+      } catch (fetchError: any) {
+        console.error('   ❌ Error fetching transaction from server:');
+        console.error(`      Message: ${fetchError.message}`);
+        console.error(`      Status: ${fetchError.response?.status}`);
+        console.error(`      Data: ${JSON.stringify(fetchError.response?.data)}`);
+        console.error(`      URL: ${fetchError.config?.url}`);
+        // Continue anyway - we'll try with transaction_id
+      }
+    }
+    
+    // If still no orderId, we can't proceed
     if (!orderId) {
-      console.error('❌ [CALLBACK] Order ID is REQUIRED but missing!');
+      console.error('❌ [CALLBACK] Order ID is REQUIRED but missing after all attempts!');
+      console.error('   Transaction ID:', transactionId);
       console.error('   Available params:', Object.keys(callbackParams));
-      const errorUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent('Order ID missing in callback')}`);
+      console.error('   All params:', JSON.stringify(callbackParams, null, 2));
+      const errorUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent('Order ID missing in callback')}&transaction_id=${transactionId || ''}`);
+      console.log(`   🔀 Redirecting to FAILURE page: ${errorUrl}`);
+      console.log('========================================================================');
       return NextResponse.redirect(errorUrl);
     }
     
