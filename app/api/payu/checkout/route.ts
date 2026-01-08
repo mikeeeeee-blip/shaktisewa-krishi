@@ -2,14 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 import crypto from 'crypto';
 
-const PAYU_ENVIRONMENT = process.env.PAYU_ENVIRONMENT || 'production';
-const PAYU_BASE_URL = PAYU_ENVIRONMENT === 'sandbox'
+// PayU Configuration - Support test mode similar to Zaakpay
+const PAYU_ENVIRONMENT = (process.env.PAYU_ENVIRONMENT || '').toLowerCase();
+const PAYU_MODE = (PAYU_ENVIRONMENT === 'test' || PAYU_ENVIRONMENT === 'sandbox') ? 'test' : 'production';
+
+// Use test credentials when in test mode, otherwise use production credentials
+// Falls back to regular keys if test keys aren't set (backward compatibility)
+const PAYU_KEY = PAYU_MODE === 'production'
+    ? (process.env.PAYU_KEY || '')
+    : (process.env.PAYU_KEY_TEST || process.env.PAYU_KEY || '');
+const PAYU_SALT = PAYU_MODE === 'production'
+    ? (process.env.PAYU_SALT || '')
+    : (process.env.PAYU_SALT_TEST || process.env.PAYU_SALT || '');
+
+// PayU API URLs - Use sandbox for test mode
+const PAYU_BASE_URL = PAYU_MODE === 'test'
     ? 'https://sandboxsecure.payu.in'
     : 'https://secure.payu.in';
 
 const PAYU_PAYMENT_URL = `${PAYU_BASE_URL}/_payment`;
-const PAYU_KEY = process.env.PAYU_KEY || '';
-const PAYU_SALT = process.env.PAYU_SALT || '';
 
 // Generate PayU hash (same as backend)
 function generatePayUHash(params: {
