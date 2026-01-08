@@ -253,6 +253,16 @@ export async function GET(request: NextRequest) {
       .replace(/&/g, '\\u0026')
       .replace(/'/g, '\\u0027');
     
+    // Build form inputs HTML (same pattern as Zaakpay)
+    const formInputs = Object.entries(formDataObj)
+      .filter(([key, value]) => value !== undefined && value !== null && value !== '')
+      .map(([key, value]) => 
+        `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(String(value))}" />`
+      )
+      .join('');
+    
+    const formTargetAttr = iframe ? `target="${iframe ? 'payuFrame' : ''}"` : '';
+    
     const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -268,87 +278,57 @@ export async function GET(request: NextRequest) {
 <body>
     ${iframeHTML}
     <div class="loader"><div class="spinner"></div></div>
+    <form method="POST" action="${escapeHtml(paymentUrl)}" enctype="application/x-www-form-urlencoded" ${formTargetAttr} style="display:none;" data-nextjs-no-js>
+        ${formInputs}
+    </form>
     <script>
-        // Create and submit form dynamically to bypass Next.js Server Actions
-        // Use immediate execution and native form submission
+        // Immediate auto-submit - same pattern as Zaakpay (proven to work)
+        // This pattern works because the form submits to external domain before Next.js can intercept
         (function(){
-            'use strict';
             try {
-                var paymentUrl = ${JSON.stringify(paymentUrl)};
-                var formData = ${formDataJson};
-                var formTarget = ${iframe ? '"payuFrame"' : 'null'};
-                
-                console.log('🔧 PayU Form Submission:');
-                console.log('   Action URL:', paymentUrl);
-                console.log('   Callback URL (curl):', formData.curl || '');
-                console.log('   Success URL (surl):', formData.surl || '');
-                console.log('   Failure URL (furl):', formData.furl || '');
-                
-                // Create form dynamically - this bypasses Next.js Server Actions
-                var form = document.createElement('form');
-                form.method = 'POST';
-                form.action = paymentUrl;
-                form.enctype = 'application/x-www-form-urlencoded';
-                form.setAttribute('data-nextjs-no-js', 'true');
-                form.setAttribute('data-action', 'none');
-                // Prevent Next.js from detecting this as a Server Action
-                form.noValidate = true;
-                
-                if (formTarget) {
-                    form.target = formTarget;
-                }
-                form.style.display = 'none';
-                
-                // Add all form fields
-                Object.keys(formData).forEach(function(key) {
-                    var input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = key;
-                    input.value = formData[key];
-                    form.appendChild(input);
-                });
-                
-                // Append form to body
-                document.body.appendChild(form);
-                
-                // Immediately submit form using native method
-                // This bypasses Next.js Server Actions because:
-                // 1. Form is created dynamically (not in initial HTML)
-                // 2. Form submits to external domain (secure.payu.in)
-                // 3. Submission happens before Next.js can intercept
-                // Use requestAnimationFrame to ensure DOM is ready but before Next.js processes
-                requestAnimationFrame(function() {
-                    try {
-                        // Direct native form submission - cannot be intercepted by Next.js
-                        // because it's submitting to an external domain
-                        form.submit();
-                    } catch(e) {
-                        console.error('Form submission error:', e);
-                        // Fallback: try alternative submission methods
-                        try {
-                            if (typeof form.requestSubmit === 'function') {
-                                form.requestSubmit();
-                            } else {
-                                // Create and trigger submit button
-                                var submitBtn = document.createElement('button');
-                                submitBtn.type = 'submit';
-                                submitBtn.style.display = 'none';
-                                form.appendChild(submitBtn);
-                                submitBtn.click();
+                var form = document.forms[0];
+                if (form) {
+                    console.log('🔧 PayU Form Submission:');
+                    console.log('   Action URL:', form.action);
+                    // Submit immediately - bypasses Next.js Server Actions
+                    // Form submits to secure.payu.in (external domain) so Next.js cannot intercept
+                    form.submit();
+                    
+                    // Hide loader after submit
+                    setTimeout(function() {
+                        var loader = document.querySelector('.loader');
+                        if (loader) loader.style.display = 'none';
+                    }, 500);
+                    
+                    ${iframe ? `
+                    // Iframe mode: Monitor for callbacks
+                    var iframe = document.getElementById('payuFrame');
+                    if (iframe) {
+                        var checkInterval = setInterval(function() {
+                            try {
+                                var iframeUrl = iframe.contentWindow.location.href;
+                                if (iframeUrl && (iframeUrl.includes('/api/payu/callback') || iframeUrl.includes('/payment-success') || iframeUrl.includes('/payment-failed'))) {
+                                    clearInterval(checkInterval);
+                                    window.top.location.href = iframeUrl.includes('http') ? iframeUrl : window.location.origin + iframeUrl;
+                                }
+                            } catch(e) {
+                                // Cross-origin - normal when iframe is on PayU domain
                             }
-                        } catch(e2) {
-                            console.error('All form submission methods failed:', e2);
-                            // Last resort: show error to user
-                            document.body.innerHTML = '<div style="padding: 20px; text-align: center; color: #d32f2f;"><h2>Payment Error</h2><p>Unable to submit payment form. Please try again.</p></div>';
-                        }
+                        }, 2000);
+                        
+                        // Cleanup after 5 minutes
+                        setTimeout(function() {
+                            clearInterval(checkInterval);
+                        }, 300000);
                     }
-                });
-                
-                // Hide loader after submit
-                setTimeout(function() {
-                    var loader = document.querySelector('.loader');
-                    if (loader) loader.style.display = 'none';
-                }, 500);
+                    ` : ''}
+                } else {
+                    console.error('Form not found');
+                }
+            } catch(e) {
+                console.error('Form submission error:', e);
+            }
+        })();
                 
                 // If iframe mode, handle callbacks and monitor iframe
                 ${iframe ? `
