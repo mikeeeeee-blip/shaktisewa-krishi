@@ -293,79 +293,58 @@ export async function GET(request: NextRequest) {
                     console.log('   Form Target:', form.target || 'same window');
                     console.log('   Iframe Mode:', ${iframe});
                     
+                    // Submit form immediately - form.target will handle iframe vs same window
+                    form.submit();
+                    console.log('✅ Form submitted, target:', form.target || 'same window');
+                    
+                    // Hide loader after submit (give it time to load)
+                    setTimeout(function() {
+                        var loader = document.querySelector('.loader');
+                        if (loader) loader.style.display = 'none';
+                    }, ${iframe ? '2000' : '1000'});
+                    
                     ${iframe ? `
-                    // Iframe mode: Wait for iframe to be ready, then submit
+                    // Iframe mode: Monitor iframe for callbacks
                     var iframe = document.getElementById('payuFrame');
                     if (iframe) {
-                        // Wait for iframe to load before submitting
-                        iframe.onload = function() {
-                            console.log('✅ Iframe ready, submitting form...');
-                            form.submit();
-                            // Hide loader after form submits
-                            setTimeout(function() {
-                                var loader = document.querySelector('.loader');
-                                if (loader) loader.style.display = 'none';
-                            }, 1000);
-                        };
-                        
-                        // Also submit immediately if iframe is already loaded
-                        if (iframe.contentDocument || iframe.contentWindow) {
-                            console.log('✅ Iframe already ready, submitting form...');
-                            form.submit();
-                            setTimeout(function() {
-                                var loader = document.querySelector('.loader');
-                                if (loader) loader.style.display = 'none';
-                            }, 1000);
-                        }
-                        
-                        // Fallback: submit after short delay if iframe doesn't load
-                        setTimeout(function() {
-                            if (form && form.action) {
-                                console.log('⚠️ Fallback: Submitting form after delay...');
-                                form.submit();
-                                setTimeout(function() {
-                                    var loader = document.querySelector('.loader');
-                                    if (loader) loader.style.display = 'none';
-                                }, 1000);
-                            }
-                        }, 500);
-                        
                         // Monitor iframe for callbacks
                         var checkInterval = setInterval(function() {
                             try {
                                 var iframeUrl = iframe.contentWindow.location.href;
                                 if (iframeUrl && (iframeUrl.includes('/api/payu/callback') || iframeUrl.includes('/payment-success') || iframeUrl.includes('/payment-failed'))) {
                                     clearInterval(checkInterval);
+                                    console.log('✅ Callback detected in iframe, redirecting parent:', iframeUrl);
                                     window.top.location.href = iframeUrl.includes('http') ? iframeUrl : window.location.origin + iframeUrl;
                                 }
                             } catch(e) {
                                 // Cross-origin - normal when iframe is on PayU domain
+                                // This means PayU page has loaded in iframe
                             }
                         }, 2000);
+                        
+                        // Also check iframe load event
+                        iframe.onload = function() {
+                            console.log('✅ Iframe loaded (may be cross-origin)');
+                            // Try to detect callback URL
+                            setTimeout(function() {
+                                try {
+                                    var iframeUrl = iframe.contentWindow.location.href;
+                                    if (iframeUrl && (iframeUrl.includes('/api/payu/callback') || iframeUrl.includes('/payment-success') || iframeUrl.includes('/payment-failed'))) {
+                                        clearInterval(checkInterval);
+                                        window.top.location.href = iframeUrl.includes('http') ? iframeUrl : window.location.origin + iframeUrl;
+                                    }
+                                } catch(e) {
+                                    // Cross-origin - PayU page loaded, this is expected
+                                }
+                            }, 1000);
+                        };
                         
                         // Cleanup after 5 minutes
                         setTimeout(function() {
                             clearInterval(checkInterval);
                         }, 300000);
-                    } else {
-                        console.error('❌ Iframe not found, submitting to same window');
-                        form.target = '';
-                        form.submit();
-                        setTimeout(function() {
-                            var loader = document.querySelector('.loader');
-                            if (loader) loader.style.display = 'none';
-                        }, 1000);
                     }
-                    ` : `
-                    // Normal mode: Submit immediately to same window
-                    form.submit();
-                    console.log('✅ Form submitted to same window');
-                    // Hide loader after submit
-                    setTimeout(function() {
-                        var loader = document.querySelector('.loader');
-                        if (loader) loader.style.display = 'none';
-                    }, 1000);
-                    `}
+                    ` : ''}
                 } else {
                     console.error('❌ Form not found');
                     document.body.innerHTML = '<div style="padding: 20px; text-align: center; color: #d32f2f;"><h2>Payment Error</h2><p>Payment form not found. Please try again.</p></div>';
