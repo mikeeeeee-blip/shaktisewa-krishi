@@ -170,6 +170,8 @@ export async function GET(request: NextRequest) {
                           'https://www.shaktisewafoudation.in';
       const payuCallbackUrl = `${frontendUrl.replace(/\/+$/, '')}/api/payu/callback?transaction_id=${transactionId}`;
       
+      console.log('🔧 Generated PayU Callback URL:', payuCallbackUrl);
+      
       payuParams = {
         key: PAYU_KEY.trim(),
         txnid: transaction.payuOrderId || transaction.orderId,
@@ -180,7 +182,7 @@ export async function GET(request: NextRequest) {
         phone: phone,
         surl: (transaction.successUrl || transaction.callbackUrl || `${frontendUrl}/payment-success`).trim(),
         furl: (transaction.failureUrl || `${frontendUrl}/payment-failed`).trim(),
-        curl: payuCallbackUrl.trim(),
+        curl: payuCallbackUrl.trim(), // PayU callback URL - PayU will POST/GET to this URL after payment
         service_provider: 'payu_paisa',
         pg: 'UPI',
         bankcode: 'UPI'
@@ -261,7 +263,7 @@ export async function GET(request: NextRequest) {
 <body>
     ${iframeHTML}
     <div class="loader"><div class="spinner"></div></div>
-    <form method="POST" action="${escapeHtml(paymentUrl)}" enctype="application/x-www-form-urlencoded" ${formTarget} style="display:none;">
+    <form method="POST" action="${escapeHtml(paymentUrl)}" enctype="application/x-www-form-urlencoded" ${formTarget} style="display:none;" data-nextjs-no-js>
         ${formInputs}
     </form>
     <script>
@@ -269,8 +271,14 @@ export async function GET(request: NextRequest) {
         (function(){
             var form = document.forms[0];
             if (form) {
-                console.log('Submitting form to:', form.action);
+                console.log('🔧 PayU Form Submission:');
+                console.log('   Action URL:', form.action);
+                console.log('   Callback URL (curl):', '${escapeHtml(payuParams.curl || '')}');
+                console.log('   Success URL (surl):', '${escapeHtml(payuParams.surl || '')}');
+                console.log('   Failure URL (furl):', '${escapeHtml(payuParams.furl || '')}');
                 try {
+                    // Prevent Next.js Server Actions from intercepting
+                    form.setAttribute('data-nextjs-no-js', 'true');
                     form.submit();
                     // Hide loader after submit
                     setTimeout(function() {

@@ -25,6 +25,17 @@ function getAbsoluteUrl(path: string): string {
   return `${baseUrl.replace(/\/+$/, '')}${path.startsWith('/') ? path : '/' + path}`;
 }
 
+// Helper to escape HTML
+function escapeHtml(str: string): string {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 export async function GET(request: NextRequest) {
   return handleCallback(request);
 }
@@ -36,61 +47,76 @@ export async function POST(request: NextRequest) {
 async function handleCallback(request: NextRequest) {
   try {
     console.log('========================================================================');
-    console.log('📥 [CALLBACK] PayU Callback Received');
+    console.log('📥 [CALLBACK] PayU Callback Received (Next.js Route)');
     console.log('========================================================================');
     console.log(`   Method: ${request.method}`);
     console.log(`   URL: ${request.url}`);
+    console.log(`   Headers:`, JSON.stringify(Object.fromEntries(request.headers.entries()), null, 2));
     
     const { searchParams } = new URL(request.url);
     
     // Extract transaction_id from URL
     const transactionId = searchParams.get('transaction_id') || searchParams.get('transactionId') || '';
     
-    console.log(`   Transaction ID: ${transactionId || 'MISSING'}`);
+    console.log(`   Transaction ID (from URL): ${transactionId || 'MISSING'}`);
     
-    // Extract all callback parameters
+    // Extract all callback parameters from URL query params
     const callbackParams: Record<string, any> = {};
     searchParams.forEach((value, key) => {
       callbackParams[key] = value;
     });
     
-    // If POST, try to get body data
+    // If POST, try to get body data (PayU typically sends form-encoded POST)
     if (request.method === 'POST') {
       try {
-        const bodyText = await request.text();
+        // Clone request to read body (can only read once)
+        const clonedRequest = request.clone();
+        const bodyText = await clonedRequest.text();
+        
+        console.log(`   POST Body (raw): ${bodyText.substring(0, 500)}${bodyText.length > 500 ? '...' : ''}`);
+        
         if (bodyText) {
-          // Try parsing as URL-encoded form data
+          // PayU typically sends form-encoded data
           try {
             const params = new URLSearchParams(bodyText);
             params.forEach((value, key) => {
               callbackParams[key] = value;
             });
+            console.log('   ✅ Parsed as URL-encoded form data');
           } catch (e) {
             // Try parsing as JSON
             try {
               const body = JSON.parse(bodyText);
               if (body && typeof body === 'object') {
                 Object.assign(callbackParams, body);
+                console.log('   ✅ Parsed as JSON');
               }
             } catch (e2) {
-              // Try form data
+              // Try form data API
               try {
                 const formData = await request.formData();
                 formData.forEach((value, key) => {
                   callbackParams[key] = value.toString();
                 });
+                console.log('   ✅ Parsed as FormData');
               } catch (e3) {
-                console.warn('⚠️ Could not parse POST body');
+                console.warn('⚠️ Could not parse POST body, using raw text');
+                callbackParams.raw_body = bodyText;
               }
             }
           }
         }
-      } catch (e) {
-        console.warn('⚠️ Error reading POST body:', e);
+      } catch (e: any) {
+        console.warn('⚠️ Error reading POST body:', e.message);
       }
     }
     
-    console.log('   Callback Parameters:', JSON.stringify(callbackParams, null, 2));
+    // Ensure transaction_id is in callback params
+    if (transactionId && !callbackParams.transaction_id) {
+      callbackParams.transaction_id = transactionId;
+    }
+    
+    console.log('   Callback Parameters (merged):', JSON.stringify(callbackParams, null, 2));
     
     if (!transactionId) {
       console.error('❌ Missing transaction_id in callback');
@@ -102,26 +128,39 @@ async function handleCallback(request: NextRequest) {
     try {
       const backendCallbackUrl = `${SERVER_BASE_URL}/api/payu/callback?transaction_id=${encodeURIComponent(transactionId)}`;
       
+      console.log('   Forwarding to backend:', backendCallbackUrl);
+      console.log('   Forwarding method:', request.method);
+      
       // Forward the callback to backend
+      // PayU sends POST with form-encoded data, so we need to send it properly
       const backendResponse = await axios({
         method: request.method,
         url: backendCallbackUrl,
-        params: callbackParams,
-        data: request.method === 'POST' ? callbackParams : undefined,
+        params: request.method === 'GET' ? callbackParams : undefined, // GET params in URL
+        data: request.method === 'POST' ? new URLSearchParams(callbackParams as any).toString() : undefined, // POST as form-encoded
         headers: {
-          'Content-Type': request.method === 'POST' ? 'application/x-www-form-urlencoded' : 'application/json'
+          'Content-Type': request.method === 'POST' ? 'application/x-www-form-urlencoded' : 'application/json',
+          'User-Agent': request.headers.get('user-agent') || 'PayU-Callback-Forwarder',
+          'X-Forwarded-For': request.headers.get('x-forwarded-for') || '',
+          'X-Real-IP': request.headers.get('x-real-ip') || ''
         },
         maxRedirects: 0,
         validateStatus: (status) => status >= 200 && status < 400,
-        timeout: 10000
-      }).catch((error) => {
+        timeout: 15000 // Increased timeout for callback processing
+      }).catch((error: any) => {
         // Backend will handle redirect, we just need to catch it
         if (error.response && error.response.status >= 300 && error.response.status < 400) {
           // This is a redirect, get the location
           const redirectUrl = error.response.headers.location;
           if (redirectUrl) {
+            console.log('   Backend returned redirect:', redirectUrl);
             return { data: null, headers: { location: redirectUrl } };
           }
+        }
+        console.error('   ❌ Backend callback error:', error.message);
+        if (error.response) {
+          console.error('   Backend response status:', error.response.status);
+          console.error('   Backend response data:', error.response.data);
         }
         throw error;
       });
@@ -259,4 +298,6 @@ async function handleCallback(request: NextRequest) {
     return NextResponse.redirect(errorUrl);
   }
 }
+
+
 
