@@ -361,18 +361,26 @@ export async function GET(request: NextRequest) {
 </body>
 </html>`;
     
-    return new NextResponse(html, {
+    // Return response with headers that explicitly prevent Server Actions processing
+    const response = new NextResponse(html, {
       status: 200,
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
         'Expires': '0',
-        // Explicitly prevent Next.js from treating this as a Server Action
         'X-Content-Type-Options': 'nosniff',
-        'X-Frame-Options': 'SAMEORIGIN'
+        // Critical: Tell Next.js this is NOT a Server Action
+        'X-Action-Required': 'none',
+        'X-Robots-Tag': 'noindex, nofollow'
       },
     });
+    
+    // Remove any Next.js Server Actions headers that might be added
+    response.headers.delete('x-action');
+    response.headers.delete('x-action-required');
+    
+    return response;
 
   } catch (error: any) {
     console.error('❌ PayU checkout API error:', error);
