@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 import crypto from 'crypto';
+import { getPublicCallbackUrl } from '../utils/ngrokHelper';
 
 // Disable Server Actions for this route - critical for external form submissions
 export const runtime = 'nodejs';
@@ -180,11 +181,24 @@ export async function GET(request: NextRequest) {
       
       // ✅ CRITICAL: Callback URL must point to pure API route (no Server Actions)
       // This is the webhook/callback endpoint that PayU will POST to
+      // For test mode with localhost, use ngrok or public URL if available
       const frontendUrl = process.env.NEXT_PUBLIC_WEBSITE_URL || 
                           process.env.NEXT_PUBLIC_FRONTEND_URL || 
                           process.env.FRONTEND_URL || 
                           'https://www.shaktisewafoudation.in';
-      const payuCallbackUrl = `${frontendUrl.replace(/\/+$/, '')}/api/payu/callback`;
+      
+      let payuCallbackUrlBase = frontendUrl.replace(/\/+$/, '');
+      if (PAYU_MODE === 'test' && (payuCallbackUrlBase.includes('localhost') || payuCallbackUrlBase.includes('127.0.0.1'))) {
+        const publicUrl = await getPublicCallbackUrl(payuCallbackUrlBase);
+        if (publicUrl && !publicUrl.includes('localhost')) {
+          payuCallbackUrlBase = publicUrl;
+          console.log('   ✅ Using public URL for callback:', payuCallbackUrlBase);
+        } else {
+          console.warn('   ⚠️ WARNING: Callback URL is localhost - PayU test servers cannot access it');
+          console.warn('   💡 For testing, use ngrok (https://ngrok.com) or set PAYU_PUBLIC_TEST_URL env var');
+        }
+      }
+      const payuCallbackUrl = `${payuCallbackUrlBase}/api/payu/callback`;
       
       // Success and Failure URLs for user redirects (separate from callback)
       // Force use new paths even if transaction has old URLs
@@ -212,11 +226,20 @@ export async function GET(request: NextRequest) {
         phone: phone,
         surl: successUrl.trim(), // User redirect URL after successful payment
         furl: failureUrl.trim(), // User redirect URL after failed payment
-        curl: payuCallbackUrl.trim(), // PayU callback/webhook URL - PayU POSTs here (server-to-server)
         service_provider: 'payu_paisa',
         pg: 'UPI',
         bankcode: 'UPI'
       };
+      
+      // ✅ CRITICAL: Only include curl if it's publicly accessible
+      // PayU servers need to access the callback URL for server-to-server webhooks
+      if (payuCallbackUrl && !payuCallbackUrl.includes('localhost') && !payuCallbackUrl.includes('127.0.0.1')) {
+        payuParams.curl = payuCallbackUrl.trim(); // PayU callback/webhook URL - PayU POSTs here (server-to-server)
+        console.log('   ✅ Callback URL (curl) set:', payuCallbackUrl);
+      } else {
+        console.log('   ⚠️ Skipping curl (callback URL) - localhost not accessible to PayU servers');
+        console.log('   💡 Note: Callbacks will still work via surl/furl redirects');
+      }
       
       // ✅ CRITICAL: Add environment parameter for test/sandbox mode
       // According to PayU docs: Set environment=1 for test/sandbox mode
