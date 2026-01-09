@@ -27,14 +27,13 @@ function PayuCheckoutContent() {
       return;
     }
 
-    // Get backend URL
-    const backendUrl = process.env.NEXT_PUBLIC_SERVER_URL || 
-                      process.env.NEXT_PUBLIC_API_URL || 
-                      process.env.NEXT_PUBLIC_BACKEND_URL ||
+    // Get backend URL - prioritize NEXT_PUBLIC_BACKEND_URL for PayU
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ||
+                      process.env.NEXT_PUBLIC_SERVER_URL || 
                       process.env.KRISHI_API_URL ||
                       (typeof window !== 'undefined' && window.location.hostname.includes('localhost') 
                         ? 'http://localhost:5001' 
-                        : 'https://api.shaktisewafoudation.in');
+                        : 'https://himora.art');
 
     const cleanBackendUrl = String(backendUrl).replace(/\/+$/, '');
     
