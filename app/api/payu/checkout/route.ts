@@ -128,7 +128,13 @@ export async function GET(request: NextRequest) {
     if (!transactionId) {
       return NextResponse.json(
         { success: false, error: 'Transaction ID is required' },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: {
+            'X-Action-Required': 'none', // Explicitly disable Server Actions
+            'x-no-server-action': 'true',
+          }
+        }
       );
     }
 
@@ -146,7 +152,13 @@ export async function GET(request: NextRequest) {
     if (!transactionResponse.data || !transactionResponse.data.success) {
       return NextResponse.json(
         { success: false, error: 'Transaction not found' },
-        { status: 404 }
+        { 
+          status: 404,
+          headers: {
+            'X-Action-Required': 'none', // Explicitly disable Server Actions
+            'x-no-server-action': 'true',
+          }
+        }
       );
     }
 
@@ -155,7 +167,13 @@ export async function GET(request: NextRequest) {
     if (transaction.status !== 'created' && transaction.status !== 'pending') {
       return NextResponse.json(
         { success: false, error: `Payment link already ${transaction.status}` },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: {
+            'X-Action-Required': 'none', // Explicitly disable Server Actions
+            'x-no-server-action': 'true',
+          }
+        }
       );
     }
 
@@ -169,7 +187,13 @@ export async function GET(request: NextRequest) {
       if (!PAYU_KEY || !PAYU_SALT) {
         return NextResponse.json(
           { success: false, error: 'PayU credentials not configured' },
-          { status: 500 }
+          { 
+            status: 500,
+            headers: {
+              'X-Action-Required': 'none', // Explicitly disable Server Actions
+              'x-no-server-action': 'true',
+            }
+          }
         );
       }
 
@@ -540,24 +564,40 @@ export async function GET(request: NextRequest) {
 </body>
 </html>`;
     
-    // Return response - minimal headers like Zaakpay (proven to work)
+    // Return response with explicit headers to prevent Server Actions validation
+    // CRITICAL: These headers tell Next.js this is NOT a Server Action
     return new NextResponse(html, {
       status: 200,
       headers: {
-        'Content-Type': 'text/html',
+        'Content-Type': 'text/html; charset=utf-8',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Robots-Tag': 'noindex, nofollow',
+        'X-Action-Required': 'none', // Explicitly disable Server Actions
+        'x-no-server-action': 'true', // Custom header to disable Server Actions
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
       },
     });
 
   } catch (error: any) {
     console.error('❌ PayU checkout API error:', error);
     
+    // Return error response with headers to prevent Server Actions validation
     return NextResponse.json(
       {
         success: false,
         error: error.message || 'Failed to process PayU checkout',
         code: 'CHECKOUT_ERROR'
       },
-      { status: 500 }
+      { 
+        status: 500,
+        headers: {
+          'X-Action-Required': 'none', // Explicitly disable Server Actions
+          'x-no-server-action': 'true', // Custom header to disable Server Actions
+          'X-Content-Type-Options': 'nosniff',
+        }
+      }
     );
   }
 }

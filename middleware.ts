@@ -3,22 +3,38 @@ import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
   // Bypass Server Actions validation for PayU checkout route
+  // CRITICAL: This prevents Next.js from treating form submissions as Server Actions
   if (request.nextUrl.pathname === '/api/payu/checkout') {
-    const response = NextResponse.next();
+    // Create a new request with modified headers
+    const requestHeaders = new Headers(request.headers);
     
-    // Remove Server Actions headers from request
-    request.headers.delete('x-action');
-    request.headers.delete('x-action-required');
-    request.headers.delete('next-action');
-    request.headers.delete('x-forwarded-host');
+    // Remove all Server Actions related headers from request
+    requestHeaders.delete('x-action');
+    requestHeaders.delete('x-action-required');
+    requestHeaders.delete('next-action');
+    requestHeaders.delete('x-forwarded-host'); // CRITICAL: This causes origin mismatch
+    requestHeaders.delete('x-forwarded-proto');
+    requestHeaders.delete('x-forwarded-for');
+    
+    // Create response with modified headers
+    const response = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
     
     // Remove Server Actions headers from response
     response.headers.delete('x-action');
     response.headers.delete('x-action-required');
     response.headers.delete('next-action');
     
-    // Add header to explicitly disable Server Actions
+    // CRITICAL: Add headers to explicitly disable Server Actions validation
     response.headers.set('x-no-server-action', 'true');
+    response.headers.set('X-Content-Type-Options', 'nosniff');
+    response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+    
+    // Prevent Next.js from treating this as a Server Action
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     
     return response;
   }
