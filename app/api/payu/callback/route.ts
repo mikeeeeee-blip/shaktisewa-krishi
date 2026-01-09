@@ -28,6 +28,17 @@ const SERVER_BASE_URL = getServerBaseUrl();
 
 export async function POST(req: NextRequest) {
   try {
+    // CRITICAL: Remove any Server Actions headers from request
+    // This prevents Next.js from treating this as a Server Action
+    // PayU POSTs directly to this route, and forwarded headers cause origin mismatch errors
+    const headers = new Headers(req.headers);
+    headers.delete('x-action');
+    headers.delete('x-action-required');
+    headers.delete('next-action');
+    headers.delete('x-forwarded-host'); // CRITICAL: This causes origin mismatch in production
+    headers.delete('x-forwarded-proto');
+    headers.delete('x-forwarded-for');
+    
     console.log('========================================================================');
     console.log('📥 [CALLBACK] PayU Callback Received (Pure API Route)');
     console.log('========================================================================');
@@ -213,6 +224,13 @@ export async function POST(req: NextRequest) {
         status: 200,
         headers: {
           'Content-Type': 'text/html; charset=utf-8',
+          'X-Content-Type-Options': 'nosniff',
+          'X-Robots-Tag': 'noindex, nofollow',
+          'X-Action-Required': 'none', // Explicitly disable Server Actions
+          'x-no-server-action': 'true', // Custom header to disable Server Actions
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
         },
       });
     }
@@ -223,7 +241,15 @@ export async function POST(req: NextRequest) {
       message: 'Callback received and processed',
       txnid: txnid,
       status: status
-    }, { status: 200 });
+    }, { 
+      status: 200,
+      headers: {
+        'X-Action-Required': 'none', // Explicitly disable Server Actions
+        'x-no-server-action': 'true', // Custom header to disable Server Actions
+        'X-Content-Type-Options': 'nosniff',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      },
+    });
     
   } catch (err: any) {
     console.error("❌ PayU callback error:", err);
@@ -231,13 +257,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ 
       success: false,
       error: err.message || 'Callback processing error'
-    }, { status: 200 });
+    }, { 
+      status: 200,
+      headers: {
+        'X-Action-Required': 'none', // Explicitly disable Server Actions
+        'x-no-server-action': 'true', // Custom header to disable Server Actions
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
   }
 }
 
 // Also handle GET requests (PayU might send GET in some cases)
 export async function GET(req: NextRequest) {
   try {
+    // CRITICAL: Remove any Server Actions headers from request
+    // This prevents Next.js from treating this as a Server Action
+    const headers = new Headers(req.headers);
+    headers.delete('x-action');
+    headers.delete('x-action-required');
+    headers.delete('next-action');
+    headers.delete('x-forwarded-host'); // CRITICAL: This causes origin mismatch in production
+    headers.delete('x-forwarded-proto');
+    headers.delete('x-forwarded-for');
+    
     console.log('========================================================================');
     console.log('📥 [CALLBACK] PayU Callback Received (GET)');
     console.log('========================================================================');
@@ -326,6 +369,13 @@ export async function GET(req: NextRequest) {
         status: 200,
         headers: {
           'Content-Type': 'text/html; charset=utf-8',
+          'X-Content-Type-Options': 'nosniff',
+          'X-Robots-Tag': 'noindex, nofollow',
+          'X-Action-Required': 'none', // Explicitly disable Server Actions
+          'x-no-server-action': 'true', // Custom header to disable Server Actions
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
         },
       });
     }
@@ -336,13 +386,28 @@ export async function GET(req: NextRequest) {
       message: 'Callback received',
       txnid: txnid,
       status: status
-    }, { status: 200 });
+    }, { 
+      status: 200,
+      headers: {
+        'X-Action-Required': 'none', // Explicitly disable Server Actions
+        'x-no-server-action': 'true', // Custom header to disable Server Actions
+        'X-Content-Type-Options': 'nosniff',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      },
+    });
     
   } catch (err: any) {
     console.error("❌ PayU callback error (GET):", err);
     return NextResponse.json({ 
       success: false,
       error: err.message || 'Callback processing error'
-    }, { status: 200 });
+    }, { 
+      status: 200,
+      headers: {
+        'X-Action-Required': 'none', // Explicitly disable Server Actions
+        'x-no-server-action': 'true', // Custom header to disable Server Actions
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
   }
 }
