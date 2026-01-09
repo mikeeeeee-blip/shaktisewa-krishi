@@ -215,6 +215,14 @@ export async function GET(request: NextRequest) {
         bankcode: 'UPI'
       };
       
+      // ✅ CRITICAL: Add environment parameter for test/sandbox mode
+      // According to PayU docs: Set environment=1 for test/sandbox mode
+      // Reference: https://docs.payu.in/docs/pythonsdk-test-integration
+      if (PAYU_MODE === 'test') {
+        payuParams.environment = '1'; // Test/Sandbox mode
+        console.log('   ✅ Test mode enabled - environment=1 added to form parameters');
+      }
+      
       // Generate hash
       const hashParams = {
         txnid: payuParams.txnid,
