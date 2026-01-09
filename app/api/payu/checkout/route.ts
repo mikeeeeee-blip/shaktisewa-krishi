@@ -325,7 +325,13 @@ export async function GET(request: NextRequest) {
         ${formInputsHtml}
     </form>
     <script>
-        (function(){
+        (function initForm(){
+            // Ensure DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initForm);
+                return;
+            }
+            
             var form = document.forms[0];
             if (!form) {
                 console.error('❌ Form not found');
@@ -343,23 +349,38 @@ export async function GET(request: NextRequest) {
                     iframe.name = 'payuFrame';
                 }
                 
-                // Submit form to iframe - browser handles target attribute
-                // The iframe exists in DOM, so form.submit() with target="payuFrame" should work
-                try {
-                    console.log('✅ Submitting form to iframe:', form.target || 'payuFrame');
-                    form.submit();
-                    
-                    // Hide loader after form submits (iframe will show PayU page)
-                    setTimeout(function() {
-                        if (loader) loader.classList.add('hidden');
-                    }, 1500);
-                } catch(e) {
-                    console.error('❌ Form submission error:', e);
-                    // Fallback: try submitting without target if iframe submission fails
-                    form.target = '';
-                    form.submit();
-                    if (loader) setTimeout(function() { loader.classList.add('hidden'); }, 1000);
+                // Ensure form has correct target
+                if (!form.target || form.target !== 'payuFrame') {
+                    form.target = 'payuFrame';
                 }
+                
+                // Small delay to ensure iframe is fully initialized
+                setTimeout(function() {
+                    try {
+                        console.log('✅ Submitting form to iframe:', form.target);
+                        console.log('   Iframe exists:', !!iframe);
+                        console.log('   Iframe name:', iframe.name);
+                        
+                        form.submit();
+                        console.log('✅ Form submitted successfully');
+                        
+                        // Hide loader after form submits (iframe will show PayU page)
+                        setTimeout(function() {
+                            if (loader) loader.classList.add('hidden');
+                        }, 1500);
+                    } catch(e) {
+                        console.error('❌ Form submission error:', e);
+                        // Fallback: try submitting without target if iframe submission fails
+                        try {
+                            form.target = '_self';
+                            form.submit();
+                            if (loader) setTimeout(function() { loader.classList.add('hidden'); }, 1000);
+                        } catch(e2) {
+                            console.error('❌ Fallback form submission also failed:', e2);
+                            document.body.innerHTML = '<div style="padding: 20px; text-align: center; color: #d32f2f;"><h2>Payment Error</h2><p>Failed to submit payment form. Please try again.</p></div>';
+                        }
+                    }
+                }, 200); // Small delay to ensure iframe is ready
                 
                 // Monitor iframe for callbacks - check URL changes after it loads
                 var lastUrl = '';
