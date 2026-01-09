@@ -173,10 +173,21 @@ export async function GET(request: NextRequest) {
         );
       }
 
+      // CRITICAL: Sanitize text fields to prevent PayU parameter errors
+      // PayU is strict about special characters in productinfo and firstname
+      const sanitizeText = (text: string, maxLength: number = 100): string => {
+        if (!text) return '';
+        return String(text)
+          .replace(/[`"'<>]/g, '') // Remove problematic characters
+          .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+          .trim()
+          .substring(0, maxLength);
+      };
+      
       const amountFormatted = parseFloat(transaction.amount).toFixed(2);
-      const productInfo = transaction.description || `Payment for ${transaction.merchantName}`;
-      const firstName = (transaction.customerName || '').split(' ')[0] || transaction.customerName || 'Customer';
-      const email = (transaction.customerEmail || '').trim();
+      const productInfo = sanitizeText(transaction.description || `Payment for ${transaction.merchantName}`, 100);
+      const firstName = sanitizeText((transaction.customerName || '').split(' ')[0] || transaction.customerName || 'Customer', 50);
+      const email = (transaction.customerEmail || '').trim().toLowerCase(); // PayU expects lowercase email
       const phone = (transaction.customerPhone || '').trim();
       
       // ✅ CRITICAL: Callback URL must point to pure API route (no Server Actions)
@@ -222,7 +233,7 @@ export async function GET(request: NextRequest) {
       // Optional: service_provider, pg, curl, environment
       payuParams = {
         key: PAYU_KEY.trim(),
-        txnid: transaction.payuOrderId || transaction.orderId,
+        txnid: (transaction.payuOrderId || transaction.orderId).trim(), // CRITICAL: Trim txnid
         amount: amountFormatted,
         productinfo: productInfo.trim(), // CRITICAL: Trim productinfo - PayU is strict
         firstname: firstName.trim(), // CRITICAL: Trim firstname - PayU is strict
