@@ -3,6 +3,32 @@ import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  const method = request.method;
+  
+  // CRITICAL: Rewrite POST requests from page URLs to API routes
+  // PayU POSTs to /payment-success, but we need to handle it in API routes
+  if (method === 'POST') {
+    if (pathname === '/payment-success') {
+      const url = request.nextUrl.clone();
+      url.pathname = '/api/payment-success';
+      return NextResponse.rewrite(url);
+    }
+    if (pathname === '/payment-failed') {
+      const url = request.nextUrl.clone();
+      url.pathname = '/api/payment-failed';
+      return NextResponse.rewrite(url);
+    }
+    if (pathname === '/payment/success') {
+      const url = request.nextUrl.clone();
+      url.pathname = '/api/payment/success';
+      return NextResponse.rewrite(url);
+    }
+    if (pathname === '/payment/failed') {
+      const url = request.nextUrl.clone();
+      url.pathname = '/api/payment/failed';
+      return NextResponse.rewrite(url);
+    }
+  }
   
   // Bypass Server Actions validation for PayU routes and payment redirect pages
   // CRITICAL: This prevents Next.js from treating external form submissions/callbacks as Server Actions
