@@ -7,11 +7,11 @@ function PayuCheckoutIframeContent() {
   const searchParams = useSearchParams();
   const transactionId = searchParams.get('transaction_id') || searchParams.get('transactionId') || '';
 
-  // Immediate redirect - no delays, no checks
+  // Redirect to checkout page with iframe parameter
   useEffect(() => {
     if (transactionId) {
-      // Immediate redirect with iframe parameter
-      window.location.href = `/api/payu/checkout?transaction_id=${encodeURIComponent(transactionId)}&iframe=true`;
+      // Redirect to checkout page with iframe=true
+      window.location.href = `/payu-checkout?transaction_id=${encodeURIComponent(transactionId)}&iframe=true`;
     }
   }, [transactionId]);
 
