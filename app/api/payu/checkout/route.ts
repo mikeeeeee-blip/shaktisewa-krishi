@@ -259,17 +259,19 @@ export async function GET(request: NextRequest) {
     // Support iframe mode with content shifted 10% up (no white box)
     const iframeStyle = iframe ? `
         body { margin: 0; padding: 0; background: #fff; overflow: hidden; }
-        .iframe-container { position: fixed; top: -10vh; left: 0; right: 0; bottom: -10vh; overflow: hidden; }
-        .iframe-container iframe { width: 100%; height: 100%; border: none; }
-        .loader { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #fff; z-index: 999998; }
+        .iframe-container { position: fixed; top: -10vh; left: 0; right: 0; bottom: -10vh; overflow: hidden; background: #fff; }
+        .iframe-container iframe { width: 100%; height: 100%; border: none; background: #fff; }
+        .loader { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #fff; z-index: 999999; }
+        .loader.hidden { display: none; }
     ` : `
         body { margin: 0; padding: 0; background: #fff; }
         .loader { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #fff; }
+        .loader.hidden { display: none; }
     `;
     
     const iframeHTML = iframe ? `
         <div class="iframe-container">
-            <iframe name="payuFrame" id="payuFrame" sandbox="allow-forms allow-scripts allow-same-origin allow-top-navigation allow-popups allow-popups-to-escape-sandbox"></iframe>
+            <iframe name="payuFrame" id="payuFrame" sandbox="allow-forms allow-scripts allow-same-origin allow-top-navigation allow-popups allow-popups-to-escape-sandbox allow-modals"></iframe>
         </div>
     ` : '';
     
@@ -323,47 +325,120 @@ export async function GET(request: NextRequest) {
         ${formInputsHtml}
     </form>
     <script>
-        // Immediate auto-submit - exact Zaakpay pattern (proven to work)
-        // This works because form submits to external domain before Next.js can intercept
-        (function(){document.forms[0].submit();})();
-        
-        ${iframe ? `
-        // Iframe mode: Monitor iframe for callbacks
-        setTimeout(function() {
+        (function(){
+            var form = document.forms[0];
+            if (!form) {
+                console.error('❌ Form not found');
+                return;
+            }
+            
+            ${iframe ? `
+            // Iframe mode: Wait for iframe to be ready, then submit
             var iframe = document.getElementById('payuFrame');
+            var loader = document.querySelector('.loader');
+            
             if (iframe) {
-                var checkInterval = setInterval(function() {
+                // Wait for iframe to be ready before submitting
+                var submitForm = function() {
                     try {
-                        var iframeUrl = iframe.contentWindow.location.href;
-                        if (iframeUrl && (iframeUrl.includes('/api/payu/callback') || iframeUrl.includes('/payment/success') || iframeUrl.includes('/payment/failed'))) {
-                            clearInterval(checkInterval);
-                            window.top.location.href = iframeUrl.includes('http') ? iframeUrl : window.location.origin + iframeUrl;
-                        }
+                        form.submit();
+                        console.log('✅ Form submitted to iframe:', form.target);
+                        // Hide loader after a short delay to allow iframe to load
+                        setTimeout(function() {
+                            if (loader) loader.classList.add('hidden');
+                        }, 1000);
                     } catch(e) {
-                        // Cross-origin - normal when iframe is on PayU domain
+                        console.error('❌ Form submission error:', e);
+                        if (loader) loader.classList.remove('hidden');
                     }
-                }, 2000);
-                
-                iframe.onload = function() {
-                    setTimeout(function() {
-                        try {
-                            var iframeUrl = iframe.contentWindow.location.href;
-                            if (iframeUrl && (iframeUrl.includes('/api/payu/callback') || iframeUrl.includes('/payment/success') || iframeUrl.includes('/payment/failed'))) {
-                                clearInterval(checkInterval);
-                                window.top.location.href = iframeUrl.includes('http') ? iframeUrl : window.location.origin + iframeUrl;
-                            }
-                        } catch(e) {
-                            // Cross-origin - expected
-                        }
-                    }, 1000);
                 };
                 
+                // Submit after iframe is attached to DOM
+                if (iframe.attachEvent) {
+                    iframe.attachEvent('onload', submitForm);
+                } else {
+                    iframe.addEventListener('load', submitForm, false);
+                }
+                
+                // Also try to submit immediately (iframe might already be ready)
+                setTimeout(submitForm, 100);
+                
+                // Monitor iframe for callbacks - check URL changes
+                var lastUrl = '';
+                var checkInterval = setInterval(function() {
+                    try {
+                        var iframeUrl = '';
+                        try {
+                            iframeUrl = iframe.contentWindow.location.href;
+                        } catch(e) {
+                            // Cross-origin - try contentDocument
+                            try {
+                                iframeUrl = iframe.contentDocument.location.href;
+                            } catch(e2) {
+                                // Still cross-origin - this is normal when iframe is on PayU domain
+                                // PayU page has loaded, continue monitoring
+                            }
+                        }
+                        
+                        // If URL changed and contains callback/success/failed, redirect parent
+                        if (iframeUrl && iframeUrl !== lastUrl) {
+                            lastUrl = iframeUrl;
+                            
+                            if (iframeUrl.includes('/api/payu/callback') || 
+                                iframeUrl.includes('/payment/success') || 
+                                iframeUrl.includes('/payment/failed') ||
+                                iframeUrl.includes('payu') && (iframeUrl.includes('success') || iframeUrl.includes('failed'))) {
+                                
+                                clearInterval(checkInterval);
+                                console.log('✅ Callback detected in iframe, redirecting parent:', iframeUrl);
+                                
+                                // Extract redirect URL from callback or use iframe URL
+                                var redirectUrl = iframeUrl.includes('http') ? iframeUrl : window.location.origin + iframeUrl;
+                                
+                                // Redirect parent window
+                                if (window.top !== window.self) {
+                                    window.top.location.href = redirectUrl;
+                                } else {
+                                    window.location.href = redirectUrl;
+                                }
+                            }
+                        }
+                    } catch(e) {
+                        // Cross-origin error - this is expected when iframe is on PayU domain
+                        // Continue monitoring
+                    }
+                }, 1000); // Check every second
+                
+                // Also listen to iframe load events
+                iframe.onload = function() {
+                    console.log('✅ Iframe loaded');
+                    // Hide loader when iframe loads
+                    setTimeout(function() {
+                        if (loader) loader.classList.add('hidden');
+                    }, 500);
+                };
+                
+                // Cleanup after 5 minutes
                 setTimeout(function() {
                     clearInterval(checkInterval);
                 }, 300000);
+            } else {
+                // Iframe not found, submit normally
+                form.submit();
+                if (loader) setTimeout(function() { loader.classList.add('hidden'); }, 1000);
             }
-        }, 100);
-        ` : ''}
+            ` : `
+            // Non-iframe mode: Submit immediately
+            form.submit();
+            console.log('✅ Form submitted to same window');
+            
+            // Hide loader after submit
+            var loader = document.querySelector('.loader');
+            setTimeout(function() {
+                if (loader) loader.classList.add('hidden');
+            }, 1000);
+            `}
+        })();
     </script>
 </body>
 </html>`;

@@ -139,6 +139,67 @@ export async function POST(req: NextRequest) {
     // ✅ CRITICAL: Always return 200 OK to PayU
     // PayU will retry if we return an error status
     // The actual payment processing happens in the backend
+    
+    // Check if this is called from an iframe by checking referer or headers
+    const isIframe = req.headers.get('referer')?.includes('payu-checkout') || 
+                     req.headers.get('sec-fetch-dest') === 'iframe' ||
+                     req.headers.get('x-requested-with') === 'iframe';
+    
+    // After processing callback, redirect to success/failure page
+    // If in iframe, return HTML that redirects parent window
+    const frontendUrl = process.env.NEXT_PUBLIC_WEBSITE_URL || 
+                        process.env.NEXT_PUBLIC_FRONTEND_URL || 
+                        process.env.FRONTEND_URL || 
+                        'https://www.shaktisewafoudation.in';
+    const baseUrl = frontendUrl.replace(/\/+$/, '');
+    
+    // Determine redirect URL based on status
+    let redirectUrl = '';
+    if (status === 'success' || status === 'Success') {
+      redirectUrl = `${baseUrl}/payment/success?txnid=${txnid}`;
+    } else {
+      redirectUrl = `${baseUrl}/payment/failed?txnid=${txnid}${error ? '&error=' + encodeURIComponent(error) : ''}`;
+    }
+    
+    // If in iframe, return HTML that redirects parent window
+    if (isIframe) {
+      const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta http-equiv="refresh" content="0;url=${redirectUrl}">
+    <script>
+        // Redirect parent window
+        if (window.top !== window.self) {
+            window.top.location.href = "${redirectUrl}";
+        } else {
+            window.location.href = "${redirectUrl}";
+        }
+    </script>
+</head>
+<body>
+    <p>Processing payment callback...</p>
+    <script>
+        setTimeout(function() {
+            if (window.top !== window.self) {
+                window.top.location.href = "${redirectUrl}";
+            } else {
+                window.location.href = "${redirectUrl}";
+            }
+        }, 100);
+    </script>
+</body>
+</html>`;
+      
+      return new NextResponse(html, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+        },
+      });
+    }
+    
+    // Not in iframe, return JSON for server-to-server callback
     return NextResponse.json({ 
       success: true,
       message: 'Callback received and processed',
@@ -194,7 +255,64 @@ export async function GET(req: NextRequest) {
       console.error('   ❌ Error forwarding GET callback to backend:', error.message);
     }
     
-    // Return success
+    // Check if this is called from an iframe
+    const isIframe = req.headers.get('referer')?.includes('payu-checkout') || 
+                     req.headers.get('sec-fetch-dest') === 'iframe' ||
+                     req.headers.get('x-requested-with') === 'iframe';
+    
+    const frontendUrl = process.env.NEXT_PUBLIC_WEBSITE_URL || 
+                        process.env.NEXT_PUBLIC_FRONTEND_URL || 
+                        process.env.FRONTEND_URL || 
+                        'https://www.shaktisewafoudation.in';
+    const baseUrl = frontendUrl.replace(/\/+$/, '');
+    
+    // Determine redirect URL based on status
+    let redirectUrl = '';
+    if (status === 'success' || status === 'Success') {
+      redirectUrl = `${baseUrl}/payment/success?txnid=${txnid}`;
+    } else {
+      redirectUrl = `${baseUrl}/payment/failed?txnid=${txnid}`;
+    }
+    
+    // If in iframe, return HTML that redirects parent window
+    if (isIframe) {
+      const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta http-equiv="refresh" content="0;url=${redirectUrl}">
+    <script>
+        // Redirect parent window
+        if (window.top !== window.self) {
+            window.top.location.href = "${redirectUrl}";
+        } else {
+            window.location.href = "${redirectUrl}";
+        }
+    </script>
+</head>
+<body>
+    <p>Processing payment callback...</p>
+    <script>
+        setTimeout(function() {
+            if (window.top !== window.self) {
+                window.top.location.href = "${redirectUrl}";
+            } else {
+                window.location.href = "${redirectUrl}";
+            }
+        }, 100);
+    </script>
+</body>
+</html>`;
+      
+      return new NextResponse(html, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+        },
+      });
+    }
+    
+    // Not in iframe, return JSON
     return NextResponse.json({ 
       success: true,
       message: 'Callback received',
