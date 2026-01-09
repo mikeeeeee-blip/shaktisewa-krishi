@@ -44,13 +44,3 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET(req: NextRequest) {
-  // For GET requests, just pass through to the page
-  return NextResponse.next({
-    headers: {
-      'X-Action-Required': 'none',
-      'x-no-server-action': 'true',
-    },
-  });
-}
-

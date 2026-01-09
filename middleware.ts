@@ -9,6 +9,10 @@ export function middleware(request: NextRequest) {
   const payuRoutes = [
     '/api/payu/checkout',
     '/api/payu/callback',
+    '/api/payment-success',
+    '/api/payment-failed',
+    '/api/payment/success',
+    '/api/payment/failed',
     '/payment-success',
     '/payment-failed',
     '/payment/success',
@@ -60,6 +64,10 @@ export const config = {
   matcher: [
     '/api/payu/checkout',
     '/api/payu/callback',
+    '/api/payment-success',
+    '/api/payment-failed',
+    '/api/payment/success',
+    '/api/payment/failed',
     '/payment-success',
     '/payment-failed',
     '/payment/success',
