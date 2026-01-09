@@ -328,7 +328,7 @@ export async function GET(request: NextRequest) {
         const escapedValue = String(value)
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
-          .replace(/>/g, '&lt;')
+          .replace(/>/g, '&gt;')
           .replace(/"/g, '&quot;')
           .replace(/'/g, '&#39;');
         return `<input type="hidden" name="${escapeHtml(key)}" value="${escapedValue}" />`;
