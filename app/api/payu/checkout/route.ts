@@ -249,7 +249,9 @@ export async function GET(request: NextRequest) {
         console.log('   ✅ Test mode enabled - environment=1 added to form parameters');
       }
       
-      // Generate hash
+      // Generate hash - CRITICAL: Hash must be generated with exact parameters
+      // Hash format: sha512(key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5|udf6|udf7|udf8|udf9|udf10|salt)
+      // Reference: https://docs.payu.in/docs/prebuilt-checkout-page-integration
       const hashParams = {
         txnid: payuParams.txnid,
         amount: payuParams.amount,
@@ -259,6 +261,10 @@ export async function GET(request: NextRequest) {
       };
       
       payuParams.hash = generatePayUHash(hashParams);
+      
+      // Log hash generation for debugging
+      console.log('   ✅ Hash generated for transaction:', payuParams.txnid);
+      console.log('   Hash preview:', payuParams.hash.substring(0, 20) + '...');
       
       // Note: Params are generated and will be used for this checkout
       // If transaction is accessed again, params will be regenerated or saved by backend
