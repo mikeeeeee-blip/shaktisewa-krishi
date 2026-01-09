@@ -116,10 +116,15 @@ function escapeHtml(str: string): string {
 export async function GET(request: NextRequest) {
   try {
     // CRITICAL: Remove any Server Actions headers from request
+    // This prevents Next.js from treating this as a Server Action
+    // In production, x-forwarded-host causes origin mismatch errors
     const headers = new Headers(request.headers);
     headers.delete('x-action');
     headers.delete('x-action-required');
     headers.delete('next-action');
+    headers.delete('x-forwarded-host'); // CRITICAL: This causes origin mismatch in production
+    headers.delete('x-forwarded-proto');
+    headers.delete('x-forwarded-for');
     
     const { searchParams } = new URL(request.url);
     const transactionId = searchParams.get('transaction_id') || searchParams.get('transactionId');
