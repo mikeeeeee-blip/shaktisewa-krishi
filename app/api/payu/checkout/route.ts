@@ -245,13 +245,14 @@ export async function GET(request: NextRequest) {
         console.log('   💡 Note: Callbacks will still work via surl/furl redirects');
       }
       
-      // ✅ CRITICAL: Add environment parameter for test/sandbox mode
-      // According to PayU docs: Set environment=1 for test/sandbox mode
-      // Reference: https://docs.payu.in/docs/pythonsdk-test-integration
-      if (PAYU_MODE === 'test') {
-        payuParams.environment = '1'; // Test/Sandbox mode
-        console.log('   ✅ Test mode enabled - environment=1 added to form parameters');
-      }
+      // ✅ CRITICAL: DO NOT add environment parameter for form submissions
+      // The 'environment' parameter is only for API calls, NOT for form submissions
+      // For form submissions, test mode is determined by the endpoint URL (test.payu.in vs secure.payu.in)
+      // Reference: https://docs.payu.in/docs/prebuilt-checkout-page-integration
+      // The environment=1 parameter can cause "Pardon, Some Problem Occurred" errors in form submissions
+      // Instead, we use the test endpoint URL: https://test.payu.in/_payment (already configured above)
+      
+      // NO environment parameter needed - test mode is handled by endpoint URL
       
       // Generate hash - CRITICAL: Must use exact trimmed values that match form submission
       // Hash format: sha512(key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5|udf6|udf7|udf8|udf9|udf10|salt)
