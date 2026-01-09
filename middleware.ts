@@ -4,9 +4,18 @@ import type { NextRequest } from 'next/server';
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   
-  // Bypass Server Actions validation for PayU routes
+  // Bypass Server Actions validation for PayU routes and payment redirect pages
   // CRITICAL: This prevents Next.js from treating external form submissions/callbacks as Server Actions
-  if (pathname === '/api/payu/checkout' || pathname === '/api/payu/callback') {
+  const payuRoutes = [
+    '/api/payu/checkout',
+    '/api/payu/callback',
+    '/payment-success',
+    '/payment-failed',
+    '/payment/success',
+    '/payment/failed'
+  ];
+  
+  if (payuRoutes.some(route => pathname === route || pathname.startsWith(route + '/'))) {
     // Create a new request with modified headers
     const requestHeaders = new Headers(request.headers);
     
@@ -48,6 +57,13 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/payu/checkout', '/api/payu/callback'],
+  matcher: [
+    '/api/payu/checkout',
+    '/api/payu/callback',
+    '/payment-success',
+    '/payment-failed',
+    '/payment/success',
+    '/payment/failed'
+  ],
 };
 
