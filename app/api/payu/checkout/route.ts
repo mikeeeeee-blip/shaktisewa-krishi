@@ -227,8 +227,8 @@ export async function GET(request: NextRequest) {
         surl: successUrl.trim(), // User redirect URL after successful payment
         furl: failureUrl.trim(), // User redirect URL after failed payment
         service_provider: 'payu_paisa',
-        pg: 'UPI',
-        bankcode: 'UPI'
+        pg: 'UPI' // Payment gateway: UPI (don't set bankcode when pg is set)
+        // Note: bankcode is not needed when pg is set - PayU will handle it
       };
       
       // ✅ CRITICAL: Only include curl if it's publicly accessible
@@ -313,17 +313,29 @@ export async function GET(request: NextRequest) {
       .replace(/'/g, '\\u0027');
     
     // Build form inputs HTML - same pattern as Zaakpay (proven to work)
+    // CRITICAL: Use proper HTML encoding for form values
+    // PayU is strict about parameter encoding
     const formInputsHtml = Object.entries(formDataObj)
       .map(([key, value]) => {
+        // Properly escape HTML entities for form values
+        // PayU requires exact parameter values - don't double-encode
         const escapedValue = String(value)
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
+          .replace(/>/g, '&lt;')
           .replace(/"/g, '&quot;')
           .replace(/'/g, '&#39;');
-        return `<input type="hidden" name="${key}" value="${escapedValue}" />`;
+        return `<input type="hidden" name="${escapeHtml(key)}" value="${escapedValue}" />`;
       })
       .join('');
+    
+    // Log form parameters for debugging (without sensitive data)
+    console.log('📋 PayU Form Parameters (excluding hash):');
+    Object.entries(formDataObj).forEach(([key, value]) => {
+      if (key !== 'hash' && key !== 'key' && key !== 'salt') {
+        console.log(`   ${key}: ${String(value).substring(0, 50)}${String(value).length > 50 ? '...' : ''}`);
+      }
+    });
 
     const formTargetAttr = iframe ? 'target="payuFrame"' : '';
     
