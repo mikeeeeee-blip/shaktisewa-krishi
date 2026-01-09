@@ -216,19 +216,23 @@ export async function GET(request: NextRequest) {
       console.log('   Success URL (surl - user redirect):', successUrl);
       console.log('   Failure URL (furl - user redirect):', failureUrl);
       
+      // PayU form parameters - CRITICAL: Order matters, exact format required
+      // Reference: https://docs.payu.in/docs/prebuilt-checkout-page-integration
+      // Mandatory parameters: key, txnid, amount, productinfo, firstname, email, phone, surl, furl, hash
+      // Optional: service_provider, pg, curl, environment
       payuParams = {
         key: PAYU_KEY.trim(),
         txnid: transaction.payuOrderId || transaction.orderId,
         amount: amountFormatted,
-        productinfo: productInfo,
-        firstname: firstName,
-        email: email,
-        phone: phone,
+        productinfo: productInfo.trim(), // CRITICAL: Trim productinfo - PayU is strict
+        firstname: firstName.trim(), // CRITICAL: Trim firstname - PayU is strict
+        email: email.trim().toLowerCase(), // CRITICAL: Trim and lowercase email - PayU is strict
+        phone: phone.trim(), // CRITICAL: Trim phone - PayU is strict
         surl: successUrl.trim(), // User redirect URL after successful payment
         furl: failureUrl.trim(), // User redirect URL after failed payment
-        service_provider: 'payu_paisa',
-        pg: 'UPI' // Payment gateway: UPI (don't set bankcode when pg is set)
-        // Note: bankcode is not needed when pg is set - PayU will handle it
+        pg: 'UPI' // Payment gateway: UPI (PayU will handle bankcode internally)
+        // Note: service_provider is optional and can cause issues with UPI - removed
+        // Note: Don't set bankcode when pg is set - PayU handles it internally
       };
       
       // ✅ CRITICAL: Only include curl if it's publicly accessible
@@ -249,22 +253,32 @@ export async function GET(request: NextRequest) {
         console.log('   ✅ Test mode enabled - environment=1 added to form parameters');
       }
       
-      // Generate hash - CRITICAL: Hash must be generated with exact parameters
+      // Generate hash - CRITICAL: Must use exact trimmed values that match form submission
       // Hash format: sha512(key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5|udf6|udf7|udf8|udf9|udf10|salt)
       // Reference: https://docs.payu.in/docs/prebuilt-checkout-page-integration
+      // IMPORTANT: Use already-trimmed values from payuParams for hash
+      // The hash must match exactly what PayU receives in the form
       const hashParams = {
-        txnid: payuParams.txnid,
-        amount: payuParams.amount,
-        productinfo: payuParams.productinfo,
-        firstname: payuParams.firstname,
-        email: payuParams.email
+        txnid: payuParams.txnid, // Already trimmed
+        amount: payuParams.amount, // Already trimmed (2 decimal places)
+        productinfo: payuParams.productinfo, // Already trimmed
+        firstname: payuParams.firstname, // Already trimmed
+        email: payuParams.email // Already trimmed and lowercased
       };
+      
+      console.log('   🔐 Generating hash with parameters:');
+      console.log('      txnid:', hashParams.txnid);
+      console.log('      amount:', hashParams.amount);
+      console.log('      productinfo:', hashParams.productinfo);
+      console.log('      firstname:', hashParams.firstname);
+      console.log('      email:', hashParams.email);
       
       payuParams.hash = generatePayUHash(hashParams);
       
       // Log hash generation for debugging
       console.log('   ✅ Hash generated for transaction:', payuParams.txnid);
       console.log('   Hash preview:', payuParams.hash.substring(0, 20) + '...');
+      console.log('   Hash length:', payuParams.hash.length, 'characters (should be 128 for SHA512)');
       
       // Note: Params are generated and will be used for this checkout
       // If transaction is accessed again, params will be regenerated or saved by backend
@@ -319,19 +333,20 @@ export async function GET(request: NextRequest) {
       .replace(/'/g, '\\u0027');
     
     // Build form inputs HTML - same pattern as Zaakpay (proven to work)
-    // CRITICAL: Use proper HTML encoding for form values
-    // PayU is strict about parameter encoding
+    // CRITICAL: PayU requires exact parameter values - browser will URL-encode automatically
+    // Don't HTML-encode form values - let browser handle URL encoding during form submission
+    // Only escape HTML special chars to prevent XSS in HTML attribute context
     const formInputsHtml = Object.entries(formDataObj)
       .map(([key, value]) => {
-        // Properly escape HTML entities for form values
-        // PayU requires exact parameter values - don't double-encode
-        const escapedValue = String(value)
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#39;');
-        return `<input type="hidden" name="${escapeHtml(key)}" value="${escapedValue}" />`;
+        // Only escape HTML special characters for HTML attribute safety
+        // Browser will automatically URL-encode these when form is submitted
+        // PayU expects raw values, not HTML-encoded values
+        const safeValue = String(value)
+          .replace(/&/g, '&amp;')  // Escape & to prevent HTML entity confusion
+          .replace(/"/g, '&quot;')  // Escape " to prevent attribute break
+          .replace(/'/g, '&#39;');  // Escape ' to prevent attribute break
+        // Note: < and > are fine in form values - browser handles them
+        return `<input type="hidden" name="${escapeHtml(key)}" value="${safeValue}" />`;
       })
       .join('');
     
