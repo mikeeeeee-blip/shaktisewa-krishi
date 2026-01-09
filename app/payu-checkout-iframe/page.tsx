@@ -1,37 +1,75 @@
-'use client';
-
-import { useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
-
-function PayuCheckoutIframeContent() {
-  const searchParams = useSearchParams();
-  const transactionId = searchParams.get('transaction_id') || searchParams.get('transactionId') || '';
-
-  // Redirect to checkout page with iframe parameter
-  useEffect(() => {
-    if (transactionId) {
-      // Redirect to checkout page with iframe=true
-      window.location.href = `/payu-checkout?transaction_id=${encodeURIComponent(transactionId)}&iframe=true`;
-    }
-  }, [transactionId]);
-
-  // Minimal loading - just a circle, no text
-  return (
-    <div className="fixed inset-0 flex items-center justify-center bg-white">
-      <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-    </div>
-  );
+// CRITICAL: This page must redirect BEFORE React hydrates to avoid Server Actions
+// Using a server component that returns HTML with immediate redirect
+async function getBackendUrl() {
+  // Get backend URL from environment variables
+  return process.env.NEXT_PUBLIC_SERVER_URL || 
+         process.env.NEXT_PUBLIC_API_URL || 
+         process.env.NEXT_PUBLIC_BACKEND_URL ||
+         process.env.KRISHI_API_URL ||
+         'http://localhost:5001';
 }
 
-export default function PayuCheckoutIframePage() {
+export default async function PayuCheckoutIframePage({
+  searchParams,
+}: {
+  searchParams: { transaction_id?: string; transactionId?: string };
+}) {
+  const transactionId = searchParams.transaction_id || searchParams.transactionId;
+  
+  if (!transactionId) {
+    return (
+      <html>
+        <body>
+          <div style={{ padding: '20px', textAlign: 'center' }}>
+            <h1>Error</h1>
+            <p>Transaction ID is required</p>
+          </div>
+        </body>
+      </html>
+    );
+  }
+
+  const backendUrl = await getBackendUrl();
+  const backendCheckoutUrl = `${String(backendUrl).replace(/\/+$/, '')}/api/payu/checkout/${transactionId}`;
+
+  // Return HTML with immediate meta refresh redirect
+  // This runs BEFORE React hydrates, completely bypassing Server Actions
   return (
-    <Suspense fallback={
-      <div className="fixed inset-0 flex items-center justify-center bg-white">
-        <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    }>
-      <PayuCheckoutIframeContent />
-    </Suspense>
+    <html>
+      <head>
+        <meta httpEquiv="refresh" content={`0;url=${backendCheckoutUrl}`} />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.location.replace("${backendCheckoutUrl}");`,
+          }}
+        />
+        <title>Redirecting to PayU...</title>
+      </head>
+      <body>
+        <div style={{ 
+          position: 'fixed', 
+          inset: 0, 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          backgroundColor: '#fff'
+        }}>
+          <div style={{
+            width: '32px',
+            height: '32px',
+            border: '2px solid #3498db',
+            borderTopColor: 'transparent',
+            borderRadius: '50%',
+            animation: 'spin 0.6s linear infinite'
+          }}></div>
+          <style>{`
+            @keyframes spin {
+              to { transform: rotate(360deg); }
+            }
+          `}</style>
+        </div>
+      </body>
+    </html>
   );
 }
 
