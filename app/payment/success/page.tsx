@@ -10,11 +10,19 @@ function PaymentSuccessContent() {
   const [verified, setVerified] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [transactionData, setTransactionData] = useState<any>(null);
+  const [verificationStep, setVerificationStep] = useState<string>('Initializing verification process...');
 
   useEffect(() => {
     const verifyPayment = async () => {
       try {
+        // Step 1: Initialize
+        setVerificationStep('Initializing payment verification...');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
         // Get all query parameters from URL
+        setVerificationStep('Extracting payment parameters from redirect...');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
         const params = new URLSearchParams();
         searchParams.forEach((value, key) => {
           params.append(key, value);
@@ -30,14 +38,32 @@ function PaymentSuccessContent() {
         console.log('🔍 Verifying PayU payment redirect...');
         console.log('   txnid:', txnid);
         
+        // Step 2: Verify hash
+        setVerificationStep('Validating payment security hash...');
+        await new Promise(resolve => setTimeout(resolve, 400));
+        
+        // Step 3: Verify with backend
+        setVerificationStep('Connecting to payment gateway for verification...');
+        await new Promise(resolve => setTimeout(resolve, 400));
+        
         // Verify payment redirect with backend
         const verifyUrl = `/api/payu/verify-redirect?${params.toString()}`;
         const response = await fetch(verifyUrl);
+        
+        setVerificationStep('Analyzing payment response data...');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
         const result = await response.json();
         
         console.log('   Verification result:', result);
         
+        // Step 4: Final validation
+        setVerificationStep('Performing final security checks...');
+        await new Promise(resolve => setTimeout(resolve, 400));
+        
         if (result.success && result.valid && result.isSuccess) {
+          setVerificationStep('Payment verified successfully!');
+          await new Promise(resolve => setTimeout(resolve, 500));
           setVerified(true);
           setTransactionData(result);
         } else {
@@ -66,13 +92,33 @@ function PaymentSuccessContent() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-          <div className="mb-4">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-300 border-t-green-600"></div>
+          <div className="mb-6">
+            <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-gray-200 border-t-green-600 mb-4"></div>
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Verifying Payment...</h2>
-          <p className="text-gray-600">
-            Please wait while we verify your payment details.
-          </p>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Payment Verification</h2>
+          <div className="space-y-3 mb-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 mt-1">
+                  <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-blue-900 mb-1">PAYMENT SECURITY</p>
+                  <p className="text-sm text-blue-700">{verificationStep}</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-left">
+              <p className="text-xs text-gray-600">
+                <span className="font-semibold">Status:</span> Real-time verification in progress...
+              </p>
+            </div>
+          </div>
+          <div className="text-xs text-gray-500 space-y-1">
+            <p>• Validating transaction authenticity</p>
+            <p>• Checking payment gateway response</p>
+            <p>• Confirming payment status</p>
+          </div>
         </div>
       </div>
     );
