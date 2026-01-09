@@ -92,6 +92,14 @@ export async function POST(req: NextRequest) {
           validateStatus: (status) => status >= 200 && status < 400
         }
       ).catch((error: any) => {
+        // Log detailed error for debugging
+        console.error('   ❌ Error forwarding callback to backend:', error.message);
+        if (error.response) {
+          console.error('   Backend response status:', error.response.status);
+          console.error('   Backend response data:', error.response.data);
+          console.error('   Backend response headers:', error.response.headers);
+        }
+        
         // Backend might return a redirect - that's okay, we just need to process the callback
         if (error.response && error.response.status >= 300 && error.response.status < 400) {
           const redirectUrl = error.response.headers.location;
@@ -105,11 +113,21 @@ export async function POST(req: NextRequest) {
           }
           return { data: { success: true, redirect: redirectUrl } };
         }
-        throw error;
+        
+        // For other errors, log but don't throw - we'll still return success to PayU
+        console.warn('   ⚠️ Backend callback processing failed, but returning success to PayU to prevent retries');
+        return { data: { success: false, error: error.message } };
       });
       
       // Backend processed the callback
       console.log('   ✅ Backend processed callback successfully');
+      console.log('   Backend response:', backendResponse?.data ? JSON.stringify(backendResponse.data).substring(0, 200) : 'No response data');
+      
+      // Try to get transaction_id from backend response
+      if (backendResponse?.data?.transaction_id) {
+        transactionId = backendResponse.data.transaction_id;
+        console.log('   Transaction ID from backend response:', transactionId);
+      }
       
       // Try to get transaction_id from backend response or from txnid lookup
       if (!transactionId && txnid) {
