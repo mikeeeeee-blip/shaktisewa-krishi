@@ -2,6 +2,7 @@
 
 import { useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { step } from '@/lib/zaakpayLogger';
 
 function ZaakpayCheckoutContent() {
   const searchParams = useSearchParams();
@@ -10,7 +11,7 @@ function ZaakpayCheckoutContent() {
   // Immediate redirect - no delays, no checks
   useEffect(() => {
     if (transactionId) {
-      // Immediate redirect - no router.push delay
+      step('CHECKOUT', transactionId, 'redirecting to /api/zaakpay/checkout', {});
       window.location.href = `/api/zaakpay/checkout?transaction_id=${encodeURIComponent(transactionId)}`;
     }
   }, [transactionId]);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 import { getChecksumString, calculateChecksum } from '../checksum';
+import { step, phase, err as zperr } from '@/lib/zaakpayLogger';
 
 const MODE = (process.env.ZACKPAY_MODE || '').toLowerCase() === 'production' ? 'production' : 'test';
 const MERCHANT_ID = MODE === 'production'
@@ -115,6 +116,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    phase('CHECKOUT', transactionId, 'Zaakpay checkout requested', { option: option || '-' });
+
     // Fetch transaction from backend API
     const transactionResponse = await axios.get(
       `${SERVER_BASE_URL}/api/zaakpay/transaction/${transactionId}`,
@@ -127,6 +130,7 @@ export async function GET(request: NextRequest) {
     );
 
     if (!transactionResponse.data || !transactionResponse.data.success) {
+      step('CHECKOUT', transactionId, 'transaction not found from server', {});
       return NextResponse.json(
         { success: false, error: 'Transaction not found' },
         { status: 404 }
@@ -134,6 +138,7 @@ export async function GET(request: NextRequest) {
     }
 
     const transaction = transactionResponse.data.transaction || transactionResponse.data.data;
+    step('CHECKOUT', transactionId, 'transaction fetched, building Zaakpay form', { orderId: transaction.zaakpayOrderId || transaction.orderId, amount: transaction.amount });
 
     if (transaction.status !== 'created' && transaction.status !== 'pending') {
       return NextResponse.json(
@@ -411,6 +416,8 @@ export async function GET(request: NextRequest) {
 </body>
 </html>`;
     
+    step('CHECKOUT', transactionId, 'returning HTML form POST to Zaakpay', { orderId: paymentData.orderId, returnUrl: returnUrl });
+
     return new NextResponse(html, {
       status: 200,
       headers: {
@@ -418,15 +425,12 @@ export async function GET(request: NextRequest) {
       },
     });
 
-  } catch (error: any) {
-    console.error('❌ Zaakpay checkout API error:', error);
-    
+  } catch (error: unknown) {
+    const txId = (typeof request?.url === 'string' && new URL(request.url).searchParams.get('transaction_id')) || undefined;
+    zperr('Zaakpay checkout failed', error, { step: 'CHECKOUT', txnId: txId });
+    const errMsg = error instanceof Error ? error.message : 'Failed to process Zaakpay checkout';
     return NextResponse.json(
-      {
-        success: false,
-        error: error.message || 'Failed to process Zaakpay checkout',
-        code: 'CHECKOUT_ERROR'
-      },
+      { success: false, error: errMsg, code: 'CHECKOUT_ERROR' },
       { status: 500 }
     );
   }

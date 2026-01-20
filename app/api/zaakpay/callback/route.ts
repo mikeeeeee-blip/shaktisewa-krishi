@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 import crypto from 'crypto';
 import { getResponseChecksumString, calculateChecksum } from '../checksum';
+import { step, phase, err as zperr } from '@/lib/zaakpayLogger';
 
 const MODE = (process.env.ZACKPAY_MODE || '').toLowerCase() === 'production' ? 'production' : 'test';
 
@@ -91,6 +92,8 @@ async function handleCallback(request: NextRequest) {
     
     // Extract transaction_id from URL first (this is always present)
     const transactionId = searchParams.get('transaction_id') || searchParams.get('transactionId') || '';
+    
+    phase('CALLBACK', transactionId, 'Zaakpay callback received (Next.js)', { requestId });
     
     console.log('   🔗 URL Parameters:');
     console.log(`      Transaction ID: ${transactionId || 'MISSING'}`);
@@ -325,6 +328,7 @@ async function handleCallback(request: NextRequest) {
     }
     
     // Forward callback to server to update transaction
+    step('CALLBACK', transactionId || orderId, 'forwarding to server', { orderId, responseCode, serverUrl: `${SERVER_BASE_URL}/api/zaakpay/callback` });
     console.log('   🔄 Forwarding callback to server...');
     console.log(`      Server URL: ${SERVER_BASE_URL}/api/zaakpay/callback`);
     
@@ -357,7 +361,7 @@ async function handleCallback(request: NextRequest) {
         
         // Redirect based on transaction status from server
         if (isAlreadyPaid) {
-          // Return HTML that closes the window immediately - NO redirect to prevent loops
+          step('REDIRECT', transaction?.transactionId || transactionId, 'success: returning auto-close HTML', { status: 'paid' });
           console.log(`   ✅ Payment successful - returning auto-close HTML (no redirect to prevent loops)`);
           console.log('========================================================================');
           
@@ -456,6 +460,7 @@ async function handleCallback(request: NextRequest) {
           });
         } else {
           const errorMsg = transaction.responseDescription || responseDescription || 'Payment failed';
+          step('REDIRECT', transaction.transactionId || transactionId, 'failure: redirecting to payment-failed', { status: 'failed', error: errorMsg.substring(0, 60) });
           const failureUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent(errorMsg)}&transaction_id=${transaction.transactionId || transactionId || orderId}`);
           console.log(`   🔀 Redirecting to FAILURE: ${failureUrl}`);
           console.log('========================================================================');
@@ -476,11 +481,13 @@ async function handleCallback(request: NextRequest) {
       
       // Still redirect based on response code if available
       if (responseCode === '100' || responseCode === 100 || responseCode === '208') {
+        step('REDIRECT', transactionId || orderId, 'success (fallback after server error)', { responseCode, to: '/payment-success' });
         const successUrl = getAbsoluteUrl(`/payment-success?transaction_id=${transactionId || orderId}`);
         console.log(`   🔀 Redirecting to SUCCESS (fallback): ${successUrl}`);
         console.log('========================================================================');
         return NextResponse.redirect(successUrl);
       } else {
+        step('REDIRECT', transactionId || orderId, 'failure (fallback after server error)', { responseCode, to: '/payment-failed' });
         const errorMsg = responseDescription || 'Payment processing error';
         const failureUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent(errorMsg)}&transaction_id=${transactionId || orderId}`);
         console.log(`   🔀 Redirecting to FAILURE (fallback): ${failureUrl}`);
@@ -492,11 +499,13 @@ async function handleCallback(request: NextRequest) {
     // Fallback: redirect based on response code
     console.log('   ⚠️ Using fallback redirect logic');
     if (responseCode === '100' || responseCode === 100 || responseCode === '208') {
+      step('REDIRECT', transactionId || orderId, 'success (final fallback)', { responseCode });
       const successUrl = getAbsoluteUrl(`/payment-success?transaction_id=${transactionId || orderId}`);
       console.log(`   🔀 Redirecting to SUCCESS (final fallback): ${successUrl}`);
       console.log('========================================================================');
       return NextResponse.redirect(successUrl);
     } else {
+      step('REDIRECT', transactionId || orderId, 'failure (final fallback)', { responseCode });
       const errorMsg = responseDescription || 'Payment failed';
       const failureUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent(errorMsg)}&transaction_id=${transactionId || orderId}`);
       console.log(`   🔀 Redirecting to FAILURE (final fallback): ${failureUrl}`);
@@ -504,17 +513,19 @@ async function handleCallback(request: NextRequest) {
       return NextResponse.redirect(failureUrl);
     }
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     const errorTime = Date.now() - startTime;
+    zperr('Zaakpay callback failed', error, { requestId, step: 'CALLBACK', durationMs: errorTime });
     console.error('========================================================================');
     console.error(`❌ [CALLBACK] FATAL ERROR after ${errorTime}ms`);
     console.error('========================================================================');
     console.error(`   Request ID: ${requestId}`);
-    console.error(`   Error: ${error.message}`);
-    console.error(`   Stack: ${error.stack}`);
+    console.error(`   Error: ${error instanceof Error ? error.message : error}`);
+    if (error instanceof Error && error.stack) console.error(`   Stack: ${error.stack}`);
     console.error('========================================================================');
     
-    const errorUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent(error.message || 'Callback processing failed')}`);
+    const errMsg = error instanceof Error ? error.message : 'Callback processing failed';
+    const errorUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent(errMsg)}`);
     return NextResponse.redirect(errorUrl);
   }
 }

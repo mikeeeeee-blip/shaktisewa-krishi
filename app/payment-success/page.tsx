@@ -2,11 +2,16 @@
 
 import { useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { step } from '@/lib/zaakpayLogger';
 
 function PaymentSuccessContent() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
+    const transactionId = searchParams.get('transaction_id') || searchParams.get('transactionId') || '';
+    if (transactionId) {
+      step('REDIRECT', transactionId, 'payment-success page reached', { page: 'payment-success' });
+    }
     // Immediately try to close the window/tab
     // This works if the window was opened as a popup by our script
     const closeWindow = () => {
