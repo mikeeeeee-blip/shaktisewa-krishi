@@ -9,12 +9,16 @@ function PaymentFailedContent() {
   const router = useRouter();
   const [transactionId, setTransactionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showSandboxHint, setShowSandboxHint] = useState(false);
 
   useEffect(() => {
     const txId = searchParams.get('transaction_id') || searchParams.get('transactionId') || '';
     const errorMsg = searchParams.get('error') || '';
+    const sandbox = searchParams.get('sandbox') === '1';
+    const responseCode = searchParams.get('response_code') || '';
     setTransactionId(txId);
     setError(errorMsg);
+    setShowSandboxHint(sandbox || responseCode === '183' || (errorMsg && (errorMsg.includes('183') || errorMsg.toLowerCase().includes('transaction has failed'))));
   }, [searchParams]);
 
   return (
@@ -30,6 +34,18 @@ function PaymentFailedContent() {
           <p className="text-gray-600 mb-4">
             {error ? decodeURIComponent(error) : 'Unfortunately, your payment could not be processed.'}
           </p>
+          {showSandboxHint && (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-left text-sm text-amber-800">
+              <p className="font-medium mb-1">Using Zaakpay sandbox (test mode)?</p>
+              <p className="mb-1">Ensure your return URL is registered in the <strong>staging</strong> dashboard:</p>
+              <ol className="list-decimal list-inside space-y-0.5 text-xs">
+                <li>Log in at <a href="https://zaakstaging.zaakpay.com" target="_blank" rel="noopener noreferrer" className="underline">zaakstaging.zaakpay.com</a></li>
+                <li>Go to <strong>Developers → Integration URLs</strong></li>
+                <li>Add your callback URL (e.g. https://your-domain.com/api/zaakpay/callback)</li>
+                <li>Set <code className="bg-amber-100 px-1 rounded">ZACKPAY_MODE=test</code> and <code className="bg-amber-100 px-1 rounded">ZACKPAY_CALLBACK_URL</code> to match</li>
+              </ol>
+            </div>
+          )}
         </div>
         
         {transactionId && (

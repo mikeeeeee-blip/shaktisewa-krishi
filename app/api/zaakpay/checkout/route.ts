@@ -12,16 +12,16 @@ const SECRET_KEY = MODE === 'production'
   : process.env.ZACKPAY_SECRET_KEY_TEST || process.env.ZACKPAY_SECRET_KEY;
 
 // Zaakpay endpoint configuration - Official Integration Pattern
-// Reference: zaakpay-nodejs-integration-main/routes/zaakpay/config.js
-// ALWAYS use production endpoint: https://api.zaakpay.com/api/paymentTransact/V8
-// Test credentials work on production endpoint when mode=0
-const BASE_URL = 'https://api.zaakpay.com';
+// ZACKPAY_MODE=test  -> Staging: https://zaakstaging.zaakpay.com (or http://zaakpay-stagapi1.mbkinternal.in)
+// ZACKPAY_MODE=production -> Live: https://api.zaakpay.com
+const BASE_URL = MODE === 'production'
+  ? 'https://api.zaakpay.com'
+  : 'https://zaakstaging.zaakpay.com';
 const TRANSACT_ENDPOINT = `${BASE_URL}/api/paymentTransact/V8`;
 
 // Log endpoint configuration
-console.log('🔧 Zaakpay API Endpoint (Always Production):', TRANSACT_ENDPOINT);
+console.log('🔧 Zaakpay API Endpoint:', TRANSACT_ENDPOINT, MODE === 'test' ? '(Staging)' : '(Live)');
 console.log('   Mode:', MODE, '(passed in request data as mode: "0" for test, "1" for production)');
-console.log('   Note: Test credentials work on production endpoint with mode="0"');
 
 // Log endpoint being used
 console.log('🔧 Zaakpay Configuration:', {
@@ -178,11 +178,12 @@ export async function GET(request: NextRequest) {
     console.log('   firstName:', firstName, '(length:', firstName.length + ', isBase64:', isBase64(firstName) + ')');
     console.log('   lastName:', lastName, '(length:', lastName.length + ', isBase64:', isBase64(lastName) + ')');
 
-    // Build returnUrl - ALWAYS use hardcoded production URL (never localhost)
-    // Hardcoded to always use: https://www.shaktisewafoudation.in/api/zaakpay/callback
-    const returnUrl = `https://www.shaktisewafoudation.in/api/zaakpay/callback?transaction_id=${transactionId}`;
+    // Build returnUrl - must be registered in Zaakpay dashboard (Developers > Integration URLs)
+    // For sandbox (ZACKPAY_MODE=test): set ZACKPAY_CALLBACK_URL to your domain and register it in staging dashboard (https://zaakstaging.zaakpay.com)
+    const callbackBase = process.env.ZACKPAY_CALLBACK_URL || process.env.ZACKPAY_RETURN_URL || 'https://www.shaktisewafoudation.in';
+    const returnUrl = `${String(callbackBase).replace(/\/$/, '')}/api/zaakpay/callback?transaction_id=${transactionId}`;
     
-    console.log('🔗 Return URL configured (hardcoded):', returnUrl);
+    console.log('🔗 Return URL configured:', returnUrl, MODE === 'test' ? '(test – whitelist in Zaakpay staging)' : '');
     
     const amountPaisa = Math.round(transaction.amount * 100).toString();
 

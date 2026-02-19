@@ -460,8 +460,12 @@ async function handleCallback(request: NextRequest) {
           });
         } else {
           const errorMsg = transaction.responseDescription || responseDescription || 'Payment failed';
-          step('REDIRECT', transaction.transactionId || transactionId, 'failure: redirecting to payment-failed', { status: 'failed', error: errorMsg.substring(0, 60) });
-          const failureUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent(errorMsg)}&transaction_id=${transaction.transactionId || transactionId || orderId}`);
+          const txnId = transaction.transactionId || transactionId || orderId;
+          const responseCode = String(transaction.responseCode ?? callbackParams.responseCode ?? '');
+          const is183 = responseCode === '183';
+          const sandboxHint = MODE === 'test' || is183 ? '&sandbox=1' : '';
+          step('REDIRECT', transaction.transactionId || transactionId, 'failure: redirecting to payment-failed', { status: 'failed', responseCode, error: errorMsg.substring(0, 60) });
+          const failureUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent(errorMsg)}&transaction_id=${encodeURIComponent(txnId)}&response_code=${responseCode}${sandboxHint}`);
           console.log(`   🔀 Redirecting to FAILURE: ${failureUrl}`);
           console.log('========================================================================');
           return NextResponse.redirect(failureUrl);
@@ -489,7 +493,8 @@ async function handleCallback(request: NextRequest) {
       } else {
         step('REDIRECT', transactionId || orderId, 'failure (fallback after server error)', { responseCode, to: '/payment-failed' });
         const errorMsg = responseDescription || 'Payment processing error';
-        const failureUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent(errorMsg)}&transaction_id=${transactionId || orderId}`);
+        const sandboxHint = MODE === 'test' || String(responseCode) === '183' ? '&sandbox=1' : '';
+        const failureUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent(errorMsg)}&transaction_id=${transactionId || orderId || ''}&response_code=${responseCode}${sandboxHint}`);
         console.log(`   🔀 Redirecting to FAILURE (fallback): ${failureUrl}`);
         console.log('========================================================================');
         return NextResponse.redirect(failureUrl);
@@ -507,7 +512,8 @@ async function handleCallback(request: NextRequest) {
     } else {
       step('REDIRECT', transactionId || orderId, 'failure (final fallback)', { responseCode });
       const errorMsg = responseDescription || 'Payment failed';
-      const failureUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent(errorMsg)}&transaction_id=${transactionId || orderId}`);
+      const sandboxHint = MODE === 'test' || String(responseCode) === '183' ? '&sandbox=1' : '';
+      const failureUrl = getAbsoluteUrl(`/payment-failed?error=${encodeURIComponent(errorMsg)}&transaction_id=${transactionId || orderId || ''}&response_code=${responseCode}${sandboxHint}`);
       console.log(`   🔀 Redirecting to FAILURE (final fallback): ${failureUrl}`);
       console.log('========================================================================');
       return NextResponse.redirect(failureUrl);
