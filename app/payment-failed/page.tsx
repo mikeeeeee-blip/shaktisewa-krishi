@@ -18,7 +18,7 @@ function PaymentFailedContent() {
     const responseCode = searchParams.get('response_code') || '';
     setTransactionId(txId);
     setError(errorMsg);
-    setShowSandboxHint(sandbox || responseCode === '183' || (errorMsg && (errorMsg.includes('183') || errorMsg.toLowerCase().includes('transaction has failed'))));
+    setShowSandboxHint(Boolean(sandbox || responseCode === '183' || (errorMsg && (errorMsg.includes('183') || errorMsg.toLowerCase().includes('transaction has failed')))));
   }, [searchParams]);
 
   return (
