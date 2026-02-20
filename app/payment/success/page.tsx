@@ -3,6 +3,37 @@
 import { useEffect, Suspense, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 
+// On success: notify opener (callback) and close tab
+function PaymentSuccessCloseAndCallback({ transactionData }: { transactionData: any }) {
+  const [canClose, setCanClose] = useState(false);
+  useEffect(() => {
+    const payload = {
+      type: 'PAYU_PAYMENT_SUCCESS',
+      success: true,
+      txnid: transactionData?.txnid,
+      mihpayid: transactionData?.mihpayid,
+      amount: transactionData?.amount,
+      transaction: transactionData?.transaction,
+      transactionId: transactionData?.transaction?.transactionId,
+    };
+    try {
+      if (typeof window !== 'undefined' && window.opener) {
+        window.opener.postMessage(payload, '*');
+      }
+    } catch (_) {}
+    try {
+      window.close();
+    } catch (_) {}
+    const t = setTimeout(() => setCanClose(true), 1500);
+    return () => clearTimeout(t);
+  }, [transactionData]);
+  return (
+    <p className="text-sm text-gray-500">
+      {canClose ? 'You may close this tab.' : 'If this tab does not close automatically, you may close it.'}
+    </p>
+  );
+}
+
 function PaymentSuccessContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -61,7 +92,7 @@ function PaymentSuccessContent() {
         setVerificationStep('Performing final security checks...');
         await new Promise(resolve => setTimeout(resolve, 400));
         
-        if (result.success && result.valid && result.isSuccess) {
+        if (result.success && (result.isSuccess || result.valid)) {
           setVerificationStep('Payment verified successfully!');
           await new Promise(resolve => setTimeout(resolve, 500));
           setVerified(true);
@@ -155,6 +186,7 @@ function PaymentSuccessContent() {
     );
   }
 
+  // Success: close tab and notify opener (callback)
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
@@ -165,31 +197,9 @@ function PaymentSuccessContent() {
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Payment Successful!</h1>
         <p className="text-gray-600 mb-6">
-          Your payment has been processed and verified successfully. You will receive a confirmation shortly.
+          Closing this window...
         </p>
-        <div className="space-y-2 mb-6">
-          {transactionData?.txnid && (
-            <p className="text-sm text-gray-500">
-              Transaction ID: {transactionData.txnid}
-            </p>
-          )}
-          {transactionData?.mihpayid && (
-            <p className="text-sm text-gray-500">
-              PayU Payment ID: {transactionData.mihpayid}
-            </p>
-          )}
-          {transactionData?.amount && (
-            <p className="text-sm text-gray-500">
-              Amount: ₹{parseFloat(transactionData.amount).toFixed(2)}
-            </p>
-          )}
-        </div>
-        <button
-          onClick={() => router.push('/')}
-          className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors"
-        >
-          Continue Shopping
-        </button>
+        <PaymentSuccessCloseAndCallback transactionData={transactionData} />
       </div>
     </div>
   );

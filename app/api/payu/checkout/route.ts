@@ -9,18 +9,12 @@ export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 export const revalidate = 0;
 
-// PayU Configuration - Support test mode similar to Zaakpay
+// PayU Configuration – strict test vs prod (no mixing)
 const PAYU_ENVIRONMENT = (process.env.PAYU_ENVIRONMENT || '').toLowerCase();
 const PAYU_MODE = (PAYU_ENVIRONMENT === 'test' || PAYU_ENVIRONMENT === 'sandbox') ? 'test' : 'production';
 
-// Use test credentials when in test mode, otherwise use production credentials
-// Falls back to regular keys if test keys aren't set (backward compatibility)
-const PAYU_KEY = PAYU_MODE === 'production'
-    ? (process.env.PAYU_KEY || '')
-    : (process.env.PAYU_KEY_TEST || process.env.PAYU_KEY || '');
-const PAYU_SALT = PAYU_MODE === 'production'
-    ? (process.env.PAYU_SALT || '')
-    : (process.env.PAYU_SALT_TEST || process.env.PAYU_SALT || '');
+const PAYU_KEY = PAYU_MODE === 'production' ? (process.env.PAYU_KEY || '') : (process.env.PAYU_KEY_TEST || '');
+const PAYU_SALT = PAYU_MODE === 'production' ? (process.env.PAYU_SALT || '') : (process.env.PAYU_SALT_TEST || '');
 
 // PayU API URLs
 // According to PayU docs: Use separate endpoints for test and production
