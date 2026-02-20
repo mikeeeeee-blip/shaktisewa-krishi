@@ -18,56 +18,47 @@ const PAYU_SALT = PAYU_MODE === 'production'
     ? (process.env.PAYU_SALT || '')
     : (process.env.PAYU_SALT_TEST || process.env.PAYU_SALT || '');
 
-// Generate PayU hash for verification
-// Hash format for response: sha512(key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5|udf6|udf7|udf8|udf9|udf10|status|salt)
+// Generate PayU RESPONSE hash for redirect verification
+// Per PayU India docs (https://docs.payu.in/docs/hashing-request-and-response):
+// "Hash Validation Logic for Payment Response (Reverse Hashing)"
+// Regular integration: sha512(SALT|status||||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key)
+// Only udf1-udf5 are used (in reverse order); no udf6-udf10.
 function generatePayUResponseHash(params: Record<string, any>): string {
-    const key = String(PAYU_KEY || '').trim();
-    const txnid = String(params.txnid || '').trim();
-    const amount = String(params.amount || '').trim();
-    const productinfo = String(params.productinfo || '').trim();
-    const firstname = String(params.firstname || '').trim();
-    const email = String(params.email || '').trim();
+    const salt = String(PAYU_SALT || '').trim();
+    // Use exact status value PayU sent (status or unmappedstatus)
+    const status = String(params.status || params.unmappedstatus || '').trim();
     const udf1 = String(params.udf1 || '').trim();
     const udf2 = String(params.udf2 || '').trim();
     const udf3 = String(params.udf3 || '').trim();
     const udf4 = String(params.udf4 || '').trim();
     const udf5 = String(params.udf5 || '').trim();
-    const udf6 = String(params.udf6 || '').trim();
-    const udf7 = String(params.udf7 || '').trim();
-    const udf8 = String(params.udf8 || '').trim();
-    const udf9 = String(params.udf9 || '').trim();
-    const udf10 = String(params.udf10 || '').trim();
-    // CRITICAL: PayU may send status in different formats - normalize it
-    // PayU sends status as 'success', 'Success', 'SUCCESS', or in unmappedstatus
-    let status = String(params.status || params.unmappedstatus || '').trim();
-    // Normalize status to lowercase for hash calculation (PayU expects exact match)
-    // But keep original for display - hash should use the exact value PayU sent
-    const salt = String(PAYU_SALT || '').trim();
+    const email = String(params.email || '').trim();
+    const firstname = String(params.firstname || '').trim();
+    const productinfo = String(params.productinfo || '').trim();
+    const amount = String(params.amount || '').trim();
+    const txnid = String(params.txnid || '').trim();
+    const key = String(PAYU_KEY || '').trim();
 
-    // Hash format for response: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5|udf6|udf7|udf8|udf9|udf10|status|salt
-    // CRITICAL: Use the exact status value PayU sent (case-sensitive)
+    // Response hash: SALT|status||||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key
+    // (6 pipes = 6 empty segments between status and udf5)
     const hashString = [
-        key,
-        txnid,
-        amount,
-        productinfo,
-        firstname,
-        email,
-        udf1,
-        udf2,
-        udf3,
-        udf4,
-        udf5,
-        udf6,
-        udf7,
-        udf8,
-        udf9,
-        udf10,
+        salt,
         status,
-        salt
+        '', '', '', '', '', '',  // 6 empty fields
+        udf5,
+        udf4,
+        udf3,
+        udf2,
+        udf1,
+        email,
+        firstname,
+        productinfo,
+        amount,
+        txnid,
+        key
     ].join('|');
 
-    return crypto.createHash('sha512').update(hashString, 'utf8').digest('hex');
+    return crypto.createHash('sha512').update(hashString, 'utf8').digest('hex').toLowerCase();
 }
 
 // Get base API URL
@@ -130,31 +121,37 @@ export async function GET(request: NextRequest) {
         }
         
         // Verify hash if provided (critical security check)
+        // PayU India response hash: sha512(SALT|status||||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key)
         let hashValid = false;
         if (hash) {
-            // CRITICAL: PayU hash verification - use exact parameter values as received
-            // PayU is very strict about hash format - must match exactly
-            const hashParams = {
-                ...payuParams,
-                status: payuParams.status || payuParams.unmappedstatus || '' // Use status or unmappedstatus
-            };
-            
-            const calculatedHash = generatePayUResponseHash(hashParams);
-            hashValid = calculatedHash.toLowerCase() === hash.toLowerCase(); // Case-insensitive comparison
-            
+            const receivedHashLower = hash.toLowerCase();
+            // Try with 'status' first (e.g. success), then with 'unmappedstatus' (e.g. captured) if present
+            const statusCandidates = [payuParams.status, payuParams.unmappedstatus].filter(Boolean);
+            const uniqueStatuses = [...new Set(statusCandidates)] as string[];
+            if (uniqueStatuses.length === 0) uniqueStatuses.push('');
+
+            for (const statusForHash of uniqueStatuses) {
+                const hashParams = { ...payuParams, status: statusForHash };
+                const calculatedHash = generatePayUResponseHash(hashParams);
+                if (calculatedHash === receivedHashLower) {
+                    hashValid = true;
+                    console.log('   Status value used for hash:', statusForHash);
+                    break;
+                }
+            }
+            if (!hashValid && uniqueStatuses.length > 0) {
+                const hashParams = { ...payuParams, status: payuParams.status || payuParams.unmappedstatus || '' };
+                const calculatedHash = generatePayUResponseHash(hashParams);
+                hashValid = calculatedHash === receivedHashLower;
+            }
+
             console.log('   Hash Verification:', hashValid ? '✅ VALID' : '❌ INVALID');
             console.log('   Received hash:', hash.substring(0, 30) + '...');
-            console.log('   Calculated hash:', calculatedHash.substring(0, 30) + '...');
-            console.log('   Status used:', hashParams.status);
-            console.log('   All params:', JSON.stringify(hashParams).substring(0, 200));
-            
             if (!hashValid) {
-                console.error('   ❌ Hash verification failed');
-                console.error('   This could be due to:');
-                console.error('   1. Incorrect PayU credentials (key/salt)');
-                console.error('   2. Parameter mismatch (status, amount, etc.)');
-                console.error('   3. PayU sending different parameter format');
-                // Still allow payment to proceed if status is success (hash might be optional in some cases)
+                const hashParams = { ...payuParams, status: payuParams.status || payuParams.unmappedstatus || '' };
+                const calculatedHash = generatePayUResponseHash(hashParams);
+                console.log('   Calculated hash:', calculatedHash.substring(0, 30) + '...');
+                console.error('   This could be due to: wrong key/salt (test vs prod), or parameter format');
             }
         } else {
             console.warn('   ⚠️ No hash provided in redirect - cannot verify authenticity');

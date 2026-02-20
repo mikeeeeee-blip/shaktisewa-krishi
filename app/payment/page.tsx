@@ -12,6 +12,7 @@ function PaymentContent() {
   const [paymentData, setPaymentData] = useState<any>(null);
   const [gateway, setGateway] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number>(900); // 15 minutes in seconds
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     const transactionId = searchParams.get('transaction_id');
@@ -69,14 +70,22 @@ function PaymentContent() {
             },
           });
 
+          const result = await response.json().catch(() => ({}));
+
           if (!response.ok) {
-            throw new Error('Failed to fetch payment data');
+            const msg = result?.error || 'Failed to fetch payment data';
+            const friendly = response.status === 503 || /database|connection not available/i.test(msg)
+              ? 'Server is reconnecting. Please try again in a moment.'
+              : msg;
+            throw new Error(friendly);
           }
 
-          const result = await response.json();
-          
           if (!result.success) {
-            throw new Error(result.error || 'Failed to load payment data');
+            const msg = result.error || 'Failed to load payment data';
+            const friendly = /database|connection not available/i.test(msg)
+              ? 'Server is reconnecting. Please try again in a moment.'
+              : msg;
+            throw new Error(friendly);
           }
 
           setPaymentData({
@@ -123,7 +132,7 @@ function PaymentContent() {
     };
 
     fetchPaymentData(gatewayParam);
-  }, [searchParams]);
+  }, [searchParams, retryCount]);
 
   // Countdown timer
   useEffect(() => {
@@ -164,18 +173,33 @@ function PaymentContent() {
   }
 
   if (error) {
+    const isServerReconnecting = /reconnecting|try again in a moment/i.test(error);
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center max-w-md mx-auto p-6">
           <div className="bg-red-50 border border-red-200 rounded-lg p-6">
             <h2 className="text-xl font-semibold text-red-800 mb-2">Payment Error</h2>
             <p className="text-red-600 mb-4">{error}</p>
-            <button
-              onClick={() => router.back()}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
-            >
-              Go Back
-            </button>
+            <div className="flex flex-wrap gap-3 justify-center">
+              {isServerReconnecting && (
+                <button
+                  onClick={() => {
+                    setError(null);
+                    setLoading(true);
+                    setRetryCount((c) => c + 1);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                >
+                  Try Again
+                </button>
+              )}
+              <button
+                onClick={() => router.back()}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+              >
+                Go Back
+              </button>
+            </div>
           </div>
         </div>
       </div>
