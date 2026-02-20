@@ -46,38 +46,47 @@ function PaymentSuccessContent() {
   useEffect(() => {
     const verifyPayment = async () => {
       try {
-        // Step 1: Initialize
+        const transactionId = searchParams.get('transaction_id') || searchParams.get('transactionId') || '';
+        const gateway = searchParams.get('gateway') || '';
+        const txnid = searchParams.get('txnid');
+
+        // Razorpay (or other gateway) success: server already verified in callback, just show success
+        if (gateway === 'razorpay' || (transactionId && !txnid)) {
+          setVerificationStep('Payment successful');
+          setVerified(true);
+          setTransactionData({
+            txnid: transactionId,
+            transactionId,
+            transaction: { transactionId, status: 'paid' },
+            amount: searchParams.get('amount') || '',
+            mihpayid: searchParams.get('payment_id') || ''
+          });
+          setVerifying(false);
+          return;
+        }
+
+        // PayU flow: verify via backend
         setVerificationStep('Initializing payment verification...');
         await new Promise(resolve => setTimeout(resolve, 300));
-        
-        // Get all query parameters from URL
         setVerificationStep('Extracting payment parameters from redirect...');
         await new Promise(resolve => setTimeout(resolve, 300));
-        
-        const params = new URLSearchParams();
-        searchParams.forEach((value, key) => {
-          params.append(key, value);
-        });
-        
-        const txnid = searchParams.get('txnid');
+
         if (!txnid) {
           setError('Missing transaction ID');
           setVerifying(false);
           return;
         }
-        
-        console.log('🔍 Verifying PayU payment redirect...');
-        console.log('   txnid:', txnid);
-        
-        // Step 2: Verify hash
+
+        const params = new URLSearchParams();
+        searchParams.forEach((value, key) => {
+          params.append(key, value);
+        });
+
         setVerificationStep('Validating payment security hash...');
         await new Promise(resolve => setTimeout(resolve, 400));
-        
-        // Step 3: Verify with backend
         setVerificationStep('Connecting to payment gateway for verification...');
         await new Promise(resolve => setTimeout(resolve, 400));
-        
-        // Verify payment redirect with backend
+
         const verifyUrl = `/api/payu/verify-redirect?${params.toString()}`;
         const response = await fetch(verifyUrl);
         
