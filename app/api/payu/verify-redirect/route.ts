@@ -207,7 +207,15 @@ export async function GET(request: NextRequest) {
             transaction: transaction ? {
                 transactionId: transaction.transactionId,
                 status: transaction.status,
-                amount: transaction.amount
+                amount: transaction.amount,
+                redirectUrl:
+                    transaction.redirectUrl ||
+                    transaction.redirect_url ||
+                    transaction.callbackUrl ||
+                    transaction.callback_url ||
+                    transaction.successUrl ||
+                    transaction.success_url ||
+                    null
             } : null,
             message: hashValid
                 ? (isSuccess ? 'Payment verified successfully' : 'Payment failed')

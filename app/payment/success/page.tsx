@@ -3,37 +3,6 @@
 import { useEffect, Suspense, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 
-// On success: notify opener (callback) and close tab
-function PaymentSuccessCloseAndCallback({ transactionData }: { transactionData: any }) {
-  const [canClose, setCanClose] = useState(false);
-  useEffect(() => {
-    const payload = {
-      type: 'PAYU_PAYMENT_SUCCESS',
-      success: true,
-      txnid: transactionData?.txnid,
-      mihpayid: transactionData?.mihpayid,
-      amount: transactionData?.amount,
-      transaction: transactionData?.transaction,
-      transactionId: transactionData?.transaction?.transactionId,
-    };
-    try {
-      if (typeof window !== 'undefined' && window.opener) {
-        window.opener.postMessage(payload, '*');
-      }
-    } catch (_) {}
-    try {
-      window.close();
-    } catch (_) {}
-    const t = setTimeout(() => setCanClose(true), 1500);
-    return () => clearTimeout(t);
-  }, [transactionData]);
-  return (
-    <p className="text-sm text-gray-500">
-      {canClose ? 'You may close this tab.' : 'If this tab does not close automatically, you may close it.'}
-    </p>
-  );
-}
-
 function PaymentSuccessContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -42,6 +11,33 @@ function PaymentSuccessContent() {
   const [error, setError] = useState<string | null>(null);
   const [transactionData, setTransactionData] = useState<any>(null);
   const [verificationStep, setVerificationStep] = useState<string>('Initializing verification process...');
+  const [redirected, setRedirected] = useState(false);
+
+  const buildCartSuccessFallback = () => {
+    const u = new URL('/cart', window.location.origin);
+    const orderId = searchParams.get('txnid') || searchParams.get('transaction_id') || '';
+    const paymentId = searchParams.get('mihpayid') || searchParams.get('payment_id') || '';
+    u.searchParams.set('payment_status', 'success');
+    if (orderId) u.searchParams.set('order_id', orderId);
+    if (paymentId) u.searchParams.set('payment_id', paymentId);
+    return u.toString();
+  };
+
+  const resolveRedirectUrl = (result: any) => {
+    const raw =
+      result?.transaction?.redirectUrl ||
+      result?.redirectUrl ||
+      searchParams.get('redirect_url') ||
+      '';
+
+    if (!raw) return buildCartSuccessFallback();
+
+    try {
+      return new URL(raw, window.location.origin).toString();
+    } catch {
+      return buildCartSuccessFallback();
+    }
+  };
 
   useEffect(() => {
     const verifyPayment = async () => {
@@ -54,13 +50,16 @@ function PaymentSuccessContent() {
         if (gateway === 'razorpay' || (transactionId && !txnid)) {
           setVerificationStep('Payment successful');
           setVerified(true);
-          setTransactionData({
+          const successData = {
             txnid: transactionId,
             transactionId,
             transaction: { transactionId, status: 'paid' },
             amount: searchParams.get('amount') || '',
             mihpayid: searchParams.get('payment_id') || ''
-          });
+          };
+          setTransactionData(successData);
+          setRedirected(true);
+          window.location.replace(resolveRedirectUrl(successData));
           setVerifying(false);
           return;
         }
@@ -106,6 +105,8 @@ function PaymentSuccessContent() {
           await new Promise(resolve => setTimeout(resolve, 500));
           setVerified(true);
           setTransactionData(result);
+          setRedirected(true);
+          window.location.replace(resolveRedirectUrl(result));
         } else {
           // Hash verification failed or payment not successful
           if (!result.valid) {
@@ -195,20 +196,14 @@ function PaymentSuccessContent() {
     );
   }
 
-  // Success: close tab and notify opener (callback)
+  // Success: immediately redirect (Razorpay-style), no success message screen.
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-        <div className="mb-4">
-          <svg className="mx-auto h-16 w-16 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Payment Successful!</h1>
-        <p className="text-gray-600 mb-6">
-          Closing this window...
+        <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-200 border-t-green-600 mb-4"></div>
+        <p className="text-gray-700">
+          {redirected ? 'Redirecting...' : 'Finalizing payment...'}
         </p>
-        <PaymentSuccessCloseAndCallback transactionData={transactionData} />
       </div>
     </div>
   );
