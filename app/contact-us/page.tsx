@@ -235,7 +235,7 @@ export default function ContactUsPage() {
                     SHAKTISEWA FOUNDATION<br />
                     MR.3. 353, MAHALAXMI NAGAR<br />
                     Indore Tukoganj, Indore<br />
-                    Indore- 452010, Madhya Pradesh
+                    Indore- 452010, 452001, Madhya Pradesh
                   </p>
                 </div>
               </div>

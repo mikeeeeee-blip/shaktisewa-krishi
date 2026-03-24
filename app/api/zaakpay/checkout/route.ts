@@ -1,0 +1,438 @@
+import { NextRequest, NextResponse } from 'next/server';
+import axios from 'axios';
+import { getChecksumString, calculateChecksum } from '../checksum';
+import { step, phase, err as zperr } from '@/lib/zaakpayLogger';
+
+const MODE = (process.env.ZACKPAY_MODE || '').toLowerCase() === 'production' ? 'production' : 'test';
+const MERCHANT_ID = MODE === 'production'
+  ? process.env.ZACKPAY_MERCHANT_ID
+  : process.env.ZACKPAY_MERCHANT_ID_TEST || process.env.ZACKPAY_MERCHANT_ID;
+const SECRET_KEY = MODE === 'production'
+  ? process.env.ZACKPAY_SECRET_KEY
+  : process.env.ZACKPAY_SECRET_KEY_TEST || process.env.ZACKPAY_SECRET_KEY;
+
+// Zaakpay endpoint configuration - Official Integration Pattern
+// ZACKPAY_MODE=test  -> Staging: https://zaakstaging.zaakpay.com (or http://zaakpay-stagapi1.mbkinternal.in)
+// ZACKPAY_MODE=production -> Live: https://api.zaakpay.com
+const BASE_URL = MODE === 'production'
+  ? 'https://api.zaakpay.com'
+  : 'https://zaakstaging.zaakpay.com';
+const TRANSACT_ENDPOINT = `${BASE_URL}/api/paymentTransact/V8`;
+
+// Log endpoint configuration
+console.log('🔧 Zaakpay API Endpoint:', TRANSACT_ENDPOINT, MODE === 'test' ? '(Staging)' : '(Live)');
+console.log('   Mode:', MODE, '(passed in request data as mode: "0" for test, "1" for production)');
+
+// Log endpoint being used
+console.log('🔧 Zaakpay Configuration:', {
+  mode: MODE,
+  endpoint: TRANSACT_ENDPOINT,
+  merchantId: MERCHANT_ID ? MERCHANT_ID.substring(0, 15) + '...' : 'NOT SET',
+  secretKeySet: !!SECRET_KEY,
+  secretKeyPreview: SECRET_KEY ? SECRET_KEY.substring(0, 10) + '...' : 'NOT SET',
+  envCheck: {
+    ZACKPAY_MODE: process.env.ZACKPAY_MODE,
+    hasMerchantIdTest: !!process.env.ZACKPAY_MERCHANT_ID_TEST,
+    hasSecretKeyTest: !!process.env.ZACKPAY_SECRET_KEY_TEST,
+    hasMerchantIdProd: !!process.env.ZACKPAY_MERCHANT_ID,
+    hasSecretKeyProd: !!process.env.ZACKPAY_SECRET_KEY
+  }
+});
+
+// CRITICAL: Verify secret key is set
+if (!SECRET_KEY) {
+  console.error('❌ CRITICAL ERROR: ZACKPAY_SECRET_KEY is not set!');
+  console.error('   Mode:', MODE);
+  console.error('   Expected env var:', MODE === 'production' ? 'ZACKPAY_SECRET_KEY' : 'ZACKPAY_SECRET_KEY_TEST');
+  console.error('   Available env vars:', Object.keys(process.env).filter(k => k.includes('ZACKPAY')));
+}
+
+if (!MERCHANT_ID) {
+  console.error('❌ CRITICAL ERROR: ZACKPAY_MERCHANT_ID is not set!');
+  console.error('   Mode:', MODE);
+  console.error('   Expected env var:', MODE === 'production' ? 'ZACKPAY_MERCHANT_ID' : 'ZACKPAY_MERCHANT_ID_TEST');
+}
+
+// Get base API URL and normalize it
+// Remove /api/v1 suffix if present since zaakpay routes are at /api/zaakpay
+function getServerBaseUrl(): string {
+  const baseUrl = process.env.NEXT_PUBLIC_SERVER_URL || 
+                  process.env.KRISHI_API_URL || 
+                  process.env.NEXT_PUBLIC_API_URL || 
+                  'http://localhost:5001';
+  
+  // Remove trailing slashes
+  let normalized = baseUrl.replace(/\/+$/, '');
+  
+  // If URL ends with /api/v1, remove it (zaakpay routes are at /api/zaakpay, not /api/v1/api/zaakpay)
+  if (normalized.endsWith('/api/v1')) {
+    normalized = normalized.replace(/\/api\/v1$/, '');
+  }
+  
+  return normalized;
+}
+
+const SERVER_BASE_URL = getServerBaseUrl();
+
+// Helper to check if string is base64
+function isBase64(str: string): boolean {
+  if (!str || typeof str !== 'string') return false;
+  const base64Pattern = /^[A-Za-z0-9+\/]{16,}={0,2}$/;
+  return base64Pattern.test(str) && str.length >= 20;
+}
+
+// Force plain text name extraction
+function forcePlainTextName(name: string, fallback: string = 'Customer'): string {
+  if (!name || typeof name !== 'string') return fallback;
+  const trimmed = name.trim();
+  if (isBase64(trimmed)) {
+    try {
+      const decoded = Buffer.from(trimmed, 'base64').toString('utf8');
+      if (decoded && decoded.trim().length > 0 && decoded.trim().length < 100 && /[a-zA-Z]/.test(decoded.trim())) {
+        return decoded.trim();
+      }
+    } catch (e) {
+      // Decode failed
+    }
+    return fallback;
+  }
+  if (trimmed.length > 50 || /^[A-Za-z0-9+\/]{20,}={0,2}$/.test(trimmed)) {
+    return fallback;
+  }
+  return trimmed;
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const transactionId = searchParams.get('transaction_id') || searchParams.get('transactionId');
+    const option = (searchParams.get('option') || '').toLowerCase();
+    const vpa = searchParams.get('vpa');
+
+    if (!transactionId) {
+      return NextResponse.json(
+        { success: false, error: 'Transaction ID is required' },
+        { status: 400 }
+      );
+    }
+
+    phase('CHECKOUT', transactionId, 'Zaakpay checkout requested', { option: option || '-' });
+
+    // Fetch transaction from backend API
+    const transactionResponse = await axios.get(
+      `${SERVER_BASE_URL}/api/zaakpay/transaction/${transactionId}`,
+      {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
+      }
+    );
+
+    if (!transactionResponse.data || !transactionResponse.data.success) {
+      step('CHECKOUT', transactionId, 'transaction not found from server', {});
+      return NextResponse.json(
+        { success: false, error: 'Transaction not found' },
+        { status: 404 }
+      );
+    }
+
+    const transaction = transactionResponse.data.transaction || transactionResponse.data.data;
+    step('CHECKOUT', transactionId, 'transaction fetched, building Zaakpay form', { orderId: transaction.zaakpayOrderId || transaction.orderId, amount: transaction.amount });
+
+    if (transaction.status !== 'created' && transaction.status !== 'pending') {
+      return NextResponse.json(
+        { success: false, error: `Payment link already ${transaction.status}` },
+        { status: 400 }
+      );
+    }
+
+    // Extract and validate customer name (force plain text)
+    const rawCustomerName = String(transaction.customerName || '').trim();
+    
+    console.log('🔍 [CHECKOUT] Extracting customer name from transaction:');
+    console.log('   Transaction ID:', transactionId);
+    console.log('   Raw customerName from DB:', rawCustomerName);
+    console.log('   Length:', rawCustomerName.length);
+    console.log('   Looks like base64:', isBase64(rawCustomerName));
+    
+    const customerName = forcePlainTextName(rawCustomerName, 'Customer');
+    const nameParts = customerName.split(' ').filter(p => p && p.trim().length > 0);
+    let firstName = forcePlainTextName(nameParts[0] || customerName, 'Customer');
+    let lastName = forcePlainTextName(nameParts.slice(1).join(' '), '');
+
+    console.log('   After forcePlainTextName - customerName:', customerName);
+    console.log('   After forcePlainTextName - firstName:', firstName);
+    console.log('   After forcePlainTextName - lastName:', lastName);
+
+    if (firstName.length > 50 || isBase64(firstName)) {
+      console.warn('⚠️ [CHECKOUT] firstName validation failed, using fallback');
+      firstName = 'Customer';
+    }
+    if (lastName.length > 50 || (lastName.length > 0 && isBase64(lastName))) {
+      console.warn('⚠️ [CHECKOUT] lastName validation failed, setting to empty');
+      lastName = '';
+    }
+    
+    console.log('✅ [CHECKOUT] Final extracted names:');
+    console.log('   firstName:', firstName, '(length:', firstName.length + ', isBase64:', isBase64(firstName) + ')');
+    console.log('   lastName:', lastName, '(length:', lastName.length + ', isBase64:', isBase64(lastName) + ')');
+
+    // Build returnUrl - must be registered in Zaakpay dashboard (Developers > Integration URLs)
+    // For sandbox (ZACKPAY_MODE=test): set ZACKPAY_CALLBACK_URL to your domain and register it in staging dashboard (https://zaakstaging.zaakpay.com)
+    const callbackBase = process.env.ZACKPAY_CALLBACK_URL || process.env.ZACKPAY_RETURN_URL || 'https://www.shaktisewafoudation.in';
+    const returnUrl = `${String(callbackBase).replace(/\/$/, '')}/api/zaakpay/callback?transaction_id=${transactionId}`;
+    
+    console.log('🔗 Return URL configured:', returnUrl, MODE === 'test' ? '(test – whitelist in Zaakpay staging)' : '');
+    
+    const amountPaisa = Math.round(transaction.amount * 100).toString();
+
+    // Map payment option to instrument
+    const mapOptionToInstrument = (opt: string) => {
+      const instrument: any = {
+        paymentMode: 'UPIAPP',
+        netbanking: { bankid: '' }
+      };
+
+      switch (opt) {
+        case 'upi':
+        case 'upi-id':
+          if (!vpa || vpa.trim().length === 0) {
+            throw new Error('VPA (UPI ID) is required for UPI Collect payment');
+          }
+          if (!/^[a-zA-Z0-9._-]+@[a-zA-Z]+$/.test(vpa.trim())) {
+            throw new Error('Invalid VPA format. Please enter a valid UPI ID (e.g., yourname@paytm)');
+          }
+          instrument.paymentMode = 'UPI';
+          instrument.netbanking.bankid = vpa.trim();
+          break;
+        case 'gpay':
+        case 'phonepe':
+        case 'paytm':
+          instrument.paymentMode = 'UPIAPP';
+          instrument.netbanking.bankid = '';
+          break;
+        default:
+          instrument.paymentMode = 'UPIAPP';
+          instrument.netbanking.bankid = '';
+      }
+      return instrument;
+    };
+
+    // Validate and prepare order ID (must be <= 20 characters per Zaakpay)
+    // Zaakpay requirement: orderId must be alphanumeric and max 20 characters
+    let orderId = transaction.zaakpayOrderId || transaction.orderId;
+    if (!orderId || orderId.length === 0) {
+      throw new Error('Order ID is missing');
+    }
+    
+    // Remove any special characters and ensure alphanumeric only
+    orderId = orderId.replace(/[^a-zA-Z0-9]/g, '');
+    
+    if (orderId.length > 20) {
+      console.warn('⚠️ Order ID is longer than 20 characters, truncating:', orderId);
+      orderId = orderId.substring(0, 20);
+    }
+    
+    if (orderId.length === 0) {
+      // Fallback: generate a simple order ID
+      orderId = `ORD${Date.now()}`.substring(0, 20);
+      console.warn('⚠️ Generated fallback orderId:', orderId);
+    }
+    
+    console.log('📋 Order ID validated:', orderId, '(length:', orderId.length + ', max: 20)');
+    
+    // Validate email format
+    const email = String(transaction.customerEmail || '').trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error('Valid customer email is required');
+    }
+    
+    // Validate phone (must be 10 digits for India, or 10-15 digits)
+    let phone = String(transaction.customerPhone || '').trim();
+    // Remove any non-digit characters
+    phone = phone.replace(/\D/g, '');
+    if (phone.length < 10 || phone.length > 15) {
+      throw new Error('Phone number must be 10-15 digits');
+    }
+    
+    // Validate product description
+    const productDescription = (transaction.description || 'Product purchase').substring(0, 100);
+    if (!productDescription || productDescription.length === 0) {
+      throw new Error('Product description is required');
+    }
+    
+    // Ensure names are not empty and valid
+    // Sanitize names: Remove special characters that might cause validation issues
+    // Zaakpay may reject names with certain special characters
+    firstName = firstName.trim();
+    if (!firstName || firstName.length === 0) {
+      firstName = 'Customer';
+    }
+    // Remove any non-alphanumeric characters except spaces, hyphens, and apostrophes
+    firstName = firstName.replace(/[^a-zA-Z0-9\s\-']/g, '');
+    // Limit length to 50 characters (Zaakpay requirement)
+    if (firstName.length > 50) {
+      firstName = firstName.substring(0, 50);
+    }
+    if (firstName.length === 0) {
+      firstName = 'Customer';
+    }
+    
+    lastName = lastName.trim();
+    // Remove any non-alphanumeric characters except spaces, hyphens, and apostrophes
+    lastName = lastName.replace(/[^a-zA-Z0-9\s\-']/g, '');
+    // Limit length to 50 characters
+    if (lastName.length > 50) {
+      lastName = lastName.substring(0, 50);
+    }
+    // lastName can be empty
+    
+    console.log('🧹 [CHECKOUT] Sanitized names:');
+    console.log('   firstName:', firstName, '(length:', firstName.length + ')');
+    console.log('   lastName:', lastName, '(length:', lastName.length + ')');
+    
+    // Build payment data according to OFFICIAL Zaakpay integration pattern
+    // Reference: zaakpay-nodejs-integration-main/routes/zaakpay/posttozaakpay.js
+    // Use flat structure with official field names (not nested orderDetail)
+    const paymentData: Record<string, string> = {
+      merchantIdentifier: MERCHANT_ID!,
+      orderId: orderId, // Must be <= 20 characters
+      amount: amountPaisa, // Amount in paisa (string)
+      currency: 'INR',
+      buyerEmail: email, // Official field name
+      buyerFirstName: firstName.trim(), // Official field name
+      buyerLastName: lastName.trim() || '', // Official field name (can be empty)
+      buyerPhoneNumber: phone, // Official field name
+      productDescription: productDescription, // Max 100 characters
+      returnUrl: returnUrl,
+      mode: MODE === 'production' ? '1' : '0', // Environment: '0' = test, '1' = production
+      showMobile: 'true',
+      // Optional: buyerAddress, buyerCity, buyerState, buyerCountry, buyerPincode
+      buyerAddress: '',
+      buyerCity: 'NA',
+      buyerState: 'NA',
+      buyerCountry: 'IN',
+      buyerPincode: '',
+      // Optional: zpPayOption to restrict payment method (e.g., "UPI", "CC", "DC", "NB")
+      // zpPayOption: option === 'upi' ? 'UPI' : undefined
+    };
+    
+    // Add zpPayOption if specified
+    if (option === 'upi' || option === 'upi-id') {
+      paymentData.zpPayOption = 'UPI';
+    }
+    
+    // Final validation before sending
+    console.log('📋 [CHECKOUT] Final payment data validation (Official Format):');
+    console.log('   orderId:', paymentData.orderId, '(length:', paymentData.orderId.length + ', max: 20)');
+    console.log('   amount:', paymentData.amount, '(paisa)');
+    console.log('   buyerEmail:', paymentData.buyerEmail, '(valid:', /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paymentData.buyerEmail) + ')');
+    console.log('   buyerPhoneNumber:', paymentData.buyerPhoneNumber, '(length:', paymentData.buyerPhoneNumber.length + ', valid: 10-15)');
+    console.log('   buyerFirstName:', paymentData.buyerFirstName, '(length:', paymentData.buyerFirstName.length + ')');
+    console.log('   buyerLastName:', paymentData.buyerLastName, '(length:', paymentData.buyerLastName.length + ')');
+    console.log('   merchantIdentifier:', MERCHANT_ID ? MERCHANT_ID.substring(0, 15) + '...' : 'NOT SET');
+    console.log('   returnUrl:', returnUrl);
+    
+    // Validate all required fields are present
+    if (!paymentData.merchantIdentifier) {
+      throw new Error('merchantIdentifier is required');
+    }
+    if (!paymentData.orderId || paymentData.orderId.length === 0) {
+      throw new Error('orderId is required');
+    }
+    if (!paymentData.amount || paymentData.amount === '0') {
+      throw new Error('amount must be greater than 0');
+    }
+    if (!paymentData.buyerEmail) {
+      throw new Error('buyerEmail is required');
+    }
+    if (!paymentData.buyerPhoneNumber) {
+      throw new Error('buyerPhoneNumber is required');
+    }
+    if (!paymentData.buyerFirstName || paymentData.buyerFirstName.length === 0) {
+      throw new Error('buyerFirstName is required');
+    }
+    
+    // ✅ OFFICIAL ZAAKPAY CHECKSUM CALCULATION
+    // Use the official checksum string format (NOT JSON.stringify)
+    if (!SECRET_KEY) {
+      throw new Error('ZACKPAY_SECRET_KEY is not configured');
+    }
+    
+    const checksumString = getChecksumString(paymentData);
+    const checksum = calculateChecksum(checksumString, SECRET_KEY);
+    
+    console.log('✅ [CHECKOUT] Official checksum calculated');
+    console.log('   Checksum string length:', checksumString.length);
+    console.log('   Checksum string preview:', checksumString.substring(0, 200) + '...');
+    console.log('   Checksum preview:', checksum.substring(0, 20) + '...');
+
+    console.log('📤 [CHECKOUT] Final data being sent to Zaakpay (Official Format):');
+    console.log('   buyerFirstName:', paymentData.buyerFirstName, '(length:', paymentData.buyerFirstName.length + ')');
+    console.log('   buyerLastName:', paymentData.buyerLastName, '(length:', paymentData.buyerLastName.length + ')');
+    console.log('   orderId:', paymentData.orderId);
+    console.log('   amount:', paymentData.amount);
+    console.log('   buyerEmail:', paymentData.buyerEmail);
+    console.log('   buyerPhoneNumber:', paymentData.buyerPhoneNumber);
+    console.log('   returnUrl:', returnUrl);
+    console.log('🔄 Preparing redirect to Zaakpay (Official Endpoint):', {
+      endpoint: TRANSACT_ENDPOINT,
+      mode: MODE,
+      transactionId: transactionId,
+      orderId: paymentData.orderId,
+      amount: paymentData.amount,
+      returnUrl: returnUrl
+    });
+    
+    // ✅ OFFICIAL ZAAKPAY FORM SUBMISSION - OPTIMIZED FOR SPEED
+    // Send individual form fields (not JSON in "data" field)
+    // Minimal HTML - no loading UI, immediate form submission
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { margin: 0; padding: 0; background: #fff; }
+        .loader { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #fff; }
+        .spinner { width: 24px; height: 24px; border: 2px solid #e0e0e0; border-top-color: #3498db; border-radius: 50%; animation: spin 0.6s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="loader"><div class="spinner"></div></div>
+    <form method="POST" action="${TRANSACT_ENDPOINT}" enctype="application/x-www-form-urlencoded" style="display:none;">
+        ${Object.entries(paymentData)
+          .filter(([key, value]) => value !== undefined && value !== null && value !== '')
+          .map(([key, value]) => 
+            `<input type="hidden" name="${key}" value="${String(value).replace(/"/g, '&quot;').replace(/'/g, '&apos;')}" />`
+          ).join('')}
+        <input type="hidden" name="checksum" value="${checksum}" />
+    </form>
+    <script>
+        // Immediate auto-submit - no delay
+        (function(){document.forms[0].submit();})();
+    </script>
+</body>
+</html>`;
+    
+    step('CHECKOUT', transactionId, 'returning HTML form POST to Zaakpay', { orderId: paymentData.orderId, returnUrl: returnUrl });
+
+    return new NextResponse(html, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/html',
+      },
+    });
+
+  } catch (error: unknown) {
+    const txId = (typeof request?.url === 'string' && new URL(request.url).searchParams.get('transaction_id')) || undefined;
+    zperr('Zaakpay checkout failed', error, { step: 'CHECKOUT', txnId: txId });
+    const errMsg = error instanceof Error ? error.message : 'Failed to process Zaakpay checkout';
+    return NextResponse.json(
+      { success: false, error: errMsg, code: 'CHECKOUT_ERROR' },
+      { status: 500 }
+    );
+  }
+}
