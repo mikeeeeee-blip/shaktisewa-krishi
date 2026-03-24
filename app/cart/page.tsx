@@ -12,7 +12,7 @@ import Footer from '@/components/Footer';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { createOrder } from '@/lib/api/orders';
-import { createPaymentSession } from '@/lib/api/payments';
+import { createPaymentLink } from '@/lib/api/payments';
 import { updatePaymentStatus } from '@/lib/api/orders';
 
 type PaymentMethod = 'cod' | 'cashfree';
@@ -282,6 +282,13 @@ export default function CartPage() {
       const onlineDiscount = 30;
       const finalTotal = totalPrice + deliveryCharges - onlineDiscount;
 
+      // Check if cart is empty
+      if (items.length === 0) {
+        setError('Your cart is empty. Please add products before placing an order.');
+        setIsProcessing(false);
+        return;
+      }
+
       // Prepare order items with product details
       const orderItems = items.map(item => ({
         productId: item.productId,
@@ -307,8 +314,8 @@ export default function CartPage() {
       // Generate unique order ID
       const orderId = `ORDER_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-      // Create payment session
-      const paymentResponse = await createPaymentSession({
+      // Create payment link
+      const paymentResponse = await createPaymentLink({
         orderId,
         orderAmount: finalTotal,
         customerDetails: {
@@ -322,128 +329,18 @@ export default function CartPage() {
         items: orderItems,
       });
 
-      if (paymentResponse.success && paymentResponse.data?.paymentSessionId) {
-        // Use Cashfree JS SDK to open checkout (recommended approach)
-        // Reference: https://www.cashfree.com/docs/payments/online/web/redirect
-        
-        const paymentSessionId = paymentResponse.data.paymentSessionId;
-        
-        // Use environment from response, or default to sandbox
-        // The backend returns 'sandbox' or 'production' in lowercase
-        const cashfreeMode = paymentResponse.data.environment || 'sandbox';
-        
-        // Ensure we're using the exact session ID as received (no additional processing)
-        const exactPaymentSessionId = paymentSessionId.trim();
-        
-        // Validate paymentSessionId format
-        if (!exactPaymentSessionId || typeof exactPaymentSessionId !== 'string') {
-          console.error('Invalid paymentSessionId type:', typeof exactPaymentSessionId, exactPaymentSessionId);
-          setError('Invalid payment session ID. Please try again.');
-          setIsProcessing(false);
-          return;
-        }
-        
-        if (!exactPaymentSessionId.startsWith('session_')) {
-          console.error('Invalid paymentSessionId format - must start with "session_":', exactPaymentSessionId.substring(0, 100));
-          setError('Invalid payment session ID format. Please try again.');
-          setIsProcessing(false);
-          return;
-        }
-        
-        console.log('Cashfree checkout configuration:', {
-          mode: cashfreeMode,
-          paymentSessionIdLength: exactPaymentSessionId.length,
-          paymentSessionIdPreview: exactPaymentSessionId.substring(0, 50) + '...',
-          hasSDK: typeof window !== 'undefined' && !!(window as any).Cashfree
-        });
-        
-        // Function to initialize and open Cashfree checkout
-        const openCashfreeCheckout = () => {
-          if (typeof window !== 'undefined' && (window as any).Cashfree) {
-            try {
-              // Re-validate session ID right before using it
-              const sessionIdToUse = exactPaymentSessionId.trim();
-              
-              if (!sessionIdToUse || !sessionIdToUse.startsWith('session_')) {
-                console.error('Invalid session ID before checkout:', sessionIdToUse);
-                setError('Invalid payment session ID. Please try again.');
-                setIsProcessing(false);
-                return;
-              }
-              
-              console.log('Initializing Cashfree SDK with mode:', cashfreeMode);
-              const cashfree = (window as any).Cashfree({
-                mode: cashfreeMode
-              });
-              
-              console.log('Opening Cashfree checkout with paymentSessionId:', sessionIdToUse.substring(0, 50) + '...');
-              console.log('Full session ID length:', sessionIdToUse.length);
-              
-              // Open Cashfree checkout using SDK
-              // IMPORTANT: Pass the exact paymentSessionId as received from backend
-              const checkoutOptions = {
-                paymentSessionId: sessionIdToUse, // Use exact session ID without modification
-                redirectTarget: '_self' as const // Opens in the same tab
-              };
-              
-              console.log('Checkout options:', {
-                paymentSessionId: checkoutOptions.paymentSessionId.substring(0, 50) + '...',
-                redirectTarget: checkoutOptions.redirectTarget,
-                sessionIdLength: checkoutOptions.paymentSessionId.length
-              });
-              
-              cashfree.checkout(checkoutOptions);
-            } catch (error: any) {
-              console.error('Error opening Cashfree checkout:', error);
-              console.error('Error details:', {
-                message: error.message,
-                stack: error.stack,
-                sessionId: exactPaymentSessionId.substring(0, 50) + '...'
-              });
-              // Fallback to direct URL redirect if SDK fails
-              if (paymentResponse.data?.paymentLink) {
-                console.log('Falling back to direct URL redirect');
-                window.location.href = paymentResponse.data.paymentLink;
-              } else {
-                setError('Failed to initialize Cashfree checkout: ' + (error.message || 'Unknown error'));
-                setIsProcessing(false);
-              }
-            }
-          } else {
-            // SDK not loaded yet, wait and retry (with timeout)
-            console.log('Cashfree SDK not loaded yet, waiting...');
-            let retryCount = 0;
-            const maxRetries = 10; // 5 seconds total (10 * 500ms)
-            
-            const checkSDK = setInterval(() => {
-              retryCount++;
-              if ((window as any).Cashfree) {
-                clearInterval(checkSDK);
-                openCashfreeCheckout();
-              } else if (retryCount >= maxRetries) {
-                clearInterval(checkSDK);
-                // If SDK still not loaded after wait, try fallback
-                if (paymentResponse.data?.paymentLink) {
-                  console.log('SDK not loaded after timeout, using fallback URL redirect');
-                  window.location.href = paymentResponse.data.paymentLink;
-                } else {
-                  setError('Cashfree payment SDK failed to load. Please refresh the page and try again.');
-                  setIsProcessing(false);
-                }
-              }
-            }, 500);
-          }
-        };
-        
-        // Try to open checkout (will retry if SDK not ready)
-        openCashfreeCheckout();
+      if (paymentResponse.success && paymentResponse.data?.linkUrl) {
+        // Redirect to payment link URL
+        const linkUrl = paymentResponse.data.linkUrl;
+        console.log('Redirecting to payment link:', linkUrl);
+        window.location.href = linkUrl;
       } else {
-        setError(paymentResponse.message || 'Failed to initiate payment. Please try again.');
+        setError(paymentResponse.message || 'Failed to create payment link. Please try again.');
         setIsProcessing(false);
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to initiate payment. Please try again.');
-      console.error('Cashfree checkout error:', err);
+      setError(err.message || 'Failed to create payment link. Please try again.');
+      console.error('Payment link creation error:', err);
       setIsProcessing(false);
     }
   };

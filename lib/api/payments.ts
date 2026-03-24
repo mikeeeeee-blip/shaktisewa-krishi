@@ -69,6 +69,59 @@ export const createPaymentSession = async (
   }
 };
 
+export interface CreatePaymentLinkRequest {
+  orderId?: string;
+  orderAmount: number;
+  customerDetails: {
+    customerId?: string;
+    customerName: string;
+    customerEmail: string;
+    customerPhone: string;
+  };
+  shippingAddress: any;
+  billingAddress?: any;
+  items: Array<{
+    productId: string;
+    productName?: string;
+    variantId?: string;
+    variantName?: string;
+    quantity: number;
+    price?: number;
+    brand?: string;
+  }>;
+}
+
+export interface CreatePaymentLinkResponse {
+  linkId: string;
+  cfLinkId: string;
+  linkUrl: string;
+  linkStatus: string;
+  linkAmount: number;
+  linkCurrency: string;
+  linkAmountPaid: number;
+  environment?: 'sandbox' | 'production';
+}
+
+/**
+ * Create a payment link with Cashfree
+ */
+export const createPaymentLink = async (
+  request: CreatePaymentLinkRequest
+): Promise<ApiResponse<CreatePaymentLinkResponse>> => {
+  try {
+    const response = await axios.post('/api/payments/create-link', request, {
+      headers: getAuthHeaders(),
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error('Error creating payment link:', error);
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message || 'Failed to create payment link',
+    };
+  }
+};
+
 /**
  * Verify payment status
  * This is typically called after redirect from Cashfree
