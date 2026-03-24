@@ -24,29 +24,55 @@ function PaymentCallbackContent() {
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
 
-    // Fallback timeout - ensure we always close after 3 seconds max
+    // Safety net: if navigation did not run (rare), send user back to cart
     const fallbackTimeout = setTimeout(() => {
-      console.warn('Payment callback timeout - closing window');
-      try {
-        window.close();
-      } catch (closeError) {
-        window.location.href = '/';
+      console.warn('Payment callback timeout — redirecting to cart');
+      const qs = new URLSearchParams(window.location.search);
+      const oid = qs.get('order_id');
+      const tid =
+        qs.get('transaction_id') ||
+        qs.get('cf_payment_id') ||
+        qs.get('payment_id') ||
+        '';
+      if (oid) {
+        const u = new URL('/cart', window.location.origin);
+        u.searchParams.set('payment_status', 'success');
+        u.searchParams.set('order_id', oid);
+        if (tid) u.searchParams.set('payment_id', tid);
+        window.location.replace(u.toString());
+      } else {
+        window.location.replace(`${window.location.origin}/cart`);
       }
     }, 3000);
 
     const processCallback = async () => {
       try {
-        const orderId = searchParams.get('order_id');
-        const transactionId = searchParams.get('transaction_id');
-        
+        // Full query string — Cashfree / nested gateways (e.g. PayU, Razorpay) may append params
+        const urlParams = new URLSearchParams(window.location.search);
+        const orderId =
+          urlParams.get('order_id') || searchParams.get('order_id');
+        const transactionId =
+          urlParams.get('transaction_id') || searchParams.get('transaction_id');
+        const paymentId =
+          transactionId ||
+          urlParams.get('cf_payment_id') ||
+          urlParams.get('payment_id') ||
+          searchParams.get('cf_payment_id') ||
+          searchParams.get('payment_id') ||
+          '';
+
+        // Same redirect shape as /api/payments/verify → cart (handlePaymentSuccess)
+        const buildCartSuccessUrl = () => {
+          const u = new URL('/cart', window.location.origin);
+          u.searchParams.set('payment_status', 'success');
+          if (orderId) u.searchParams.set('order_id', orderId);
+          if (paymentId) u.searchParams.set('payment_id', paymentId);
+          return u.pathname + u.search;
+        };
+
         if (!orderId && !transactionId) {
           clearTimeout(fallbackTimeout);
-          // Close immediately if missing info
-          try {
-            window.close();
-          } catch (closeError) {
-            window.location.href = '/';
-          }
+          window.location.replace(`${window.location.origin}/cart`);
           return;
         }
 
@@ -100,27 +126,37 @@ function PaymentCallbackContent() {
           // Ignore errors - webhook will handle verification
         });
 
-        // Clear fallback timeout since we're closing immediately
         clearTimeout(fallbackTimeout);
 
-        // Close immediately - no delay, don't wait for backend response
-        // The webhook will handle payment verification asynchronously
-        try {
-          window.close();
-        } catch (closeError) {
-          // If window.close() fails, redirect to home
-          window.location.href = '/';
+        const cartSuccessPath = buildCartSuccessUrl();
+
+        // Popup / new-tab flow (e.g. some wallet or Razorpay-style opens): focus parent and close this tab
+        if (window.opener && !window.opener.closed) {
+          try {
+            window.opener.location.href = `${window.location.origin}${cartSuccessPath}`;
+            window.close();
+            return;
+          } catch (e) {
+            console.warn('Could not navigate opener; falling back to same-tab redirect', e);
+          }
         }
+
+        // Full-page redirect flow (e.g. PayU / net banking in same tab): window.close() is a no-op — go to cart
+        window.location.replace(`${window.location.origin}${cartSuccessPath}`);
 
       } catch (error) {
         console.error('Payment callback processing error:', error);
         clearTimeout(fallbackTimeout);
-        // Close immediately on error too
         try {
-          window.close();
-        } catch (closeError) {
-          window.location.href = '/';
+          if (window.opener && !window.opener.closed) {
+            window.opener.location.href = `${window.location.origin}/cart`;
+            window.close();
+            return;
+          }
+        } catch {
+          /* ignore */
         }
+        window.location.replace(`${window.location.origin}/cart`);
       }
     };
 
